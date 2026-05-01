@@ -1,0 +1,11 @@
+node_modules/
+.env
+*.local
+dist/
+backend/public/generated/
+backend/public/thumbnails/
+backend/uploads/
+backend/data/db.json
+.DS_Store
+Thumbs.db
+.vscode/
