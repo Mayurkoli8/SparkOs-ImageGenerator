@@ -40,7 +40,7 @@ const BRAND_TYPES = [
 // ── All available image models ──────────────────────────
 const IMAGE_MODELS = [
   { value: "gpt-image-1",  label: "GPT Image 1",          desc: "OpenAI multimodal image model" },
-  { value: "gpt-image-2",  label: "GPT Image 2 ✦ Latest", desc: "Best quality, most detailed" },
+  { value: "gpt-image-1.5",  label: "GPT Image 1.5 ✦ Recommended", desc: "Best quality, most detailed" },
   { value: "dall-e-3",     label: "DALL-E 3",              desc: "High quality, HD mode available" },
   { value: "dall-e-2",     label: "DALL-E 2",              desc: "Faster, lower cost" },
 ];
@@ -81,8 +81,8 @@ async function enhanceWithOpenAI(systemPrompt, userMsg, apiKey, gptModel = "gpt-
 
 /** Image generation via OpenAI Images API */
 async function generateImage(prompt, size, apiKey, model) {
-  // gpt-image-1 and gpt-image-2 share the same endpoint but slightly different params
-  const isGptImage = model === "gpt-image-1" || model === "gpt-image-2";
+  // gpt-image-1 and gpt-image-1.5 share the same endpoint but slightly different params
+  const isGptImage = model === "gpt-image-1" || model === "gpt-image-1.5";
 
   const body = isGptImage
     ? { model, prompt, n: 1, size }
@@ -1434,7 +1434,7 @@ function ApiSettings({ openAIKey, setOpenAIKey, imageModel, setImageModel, enhan
                 <div className={`text-sm font-medium ${imageModel === m.value ? "text-amber-400" : "text-gray-300"}`}>{m.label}</div>
                 <div className="text-[11px] text-gray-600 mt-0.5">{m.desc}</div>
               </div>
-              {m.value === "gpt-image-2" && <Badge color="amber">Recommended</Badge>}
+              {m.value === "gpt-image-1.5" && <Badge color="amber">Recommended</Badge>}
             </button>
           ))}
         </div>
@@ -1488,7 +1488,7 @@ export default function SparkOs() {
   const [history,      setHistory]      = useState([]);
   const [preview,      setPreview]      = useState(null);
   const [openAIKey,    setOpenAIKey]    = useState("");
-  const [imageModel,   setImageModel]   = useState("gpt-image-2");   // ← default to gpt-image-2
+  const [imageModel,   setImageModel]   = useState("gpt-image-1.5");   // ← default to gpt-image-1.5
   const [enhanceModel, setEnhanceModel] = useState("gpt-4o");
   const [toast,        setToast]        = useState(null);
 

@@ -148,12 +148,12 @@ Return ONLY valid JSON — no markdown:
 }
 
 // ─────────────────────────────────────────────────────────
-// IMAGE GENERATION — gpt-image-2, gpt-image-1, dall-e-3, dall-e-2
+// IMAGE GENERATION — gpt-image-1.5, gpt-image-1, dall-e-3, dall-e-2
 // ─────────────────────────────────────────────────────────
 
-async function generateImage(prompt, size, apiKey, model = "gpt-image-2") {
+async function generateImage(prompt, size, apiKey, model = "gpt-image-1.5") {
   const openai     = getOpenAI(apiKey);
-  const isGptImage = model === "gpt-image-1" || model === "gpt-image-2";
+  const isGptImage = model === "gpt-image-1" || model === "gpt-image-1.5";
 
   const params = isGptImage
     ? { model, prompt, n: 1, size }
@@ -224,7 +224,7 @@ async function applyBrandOverlay(imageBuffer, brand, logoPath) {
 // GENERATION PIPELINE
 // ─────────────────────────────────────────────────────────
 
-async function runGenerationPipeline({ prompt, brand, campaignType="auto", aspectRatio="1:1", mode="ai", imageModel="gpt-image-2", enhanceModel="gpt-4o", apiKey, req }) {
+async function runGenerationPipeline({ prompt, brand, campaignType="auto", aspectRatio="1:1", mode="ai", imageModel="gpt-image-1.5", enhanceModel="gpt-4o", apiKey, req }) {
   const enhanced   = await enhancePrompt(prompt, brand, campaignType, aspectRatio, apiKey, enhanceModel);
   const finalRatio = enhanced.aspectRatio || aspectRatio;
   const size       = RATIO_SIZES[finalRatio] || "1024x1024";
@@ -306,7 +306,7 @@ app.post("/api/generate", async (req, res) => {
   if (!apiKey) return res.status(400).json({ error: "OpenAI API key required" });
   const db = readDB(); const brand = brandId ? (db.brands[brandId]||{}) : (Object.values(db.brands)[0]||{});
   try {
-    const result = await runGenerationPipeline({ prompt, brand, campaignType, aspectRatio, mode, imageModel: imageModel||process.env.DEFAULT_IMAGE_MODEL||"gpt-image-2", enhanceModel: enhanceModel||"gpt-4o", apiKey, req });
+    const result = await runGenerationPipeline({ prompt, brand, campaignType, aspectRatio, mode, imageModel: imageModel||process.env.DEFAULT_IMAGE_MODEL||"gpt-image-1.5", enhanceModel: enhanceModel||"gpt-4o", apiKey, req });
     res.json({ success: true, ...result });
   } catch (err) { console.error(err.message); res.status(500).json({ success: false, error: err.message }); }
 });
@@ -360,7 +360,7 @@ app.post("/webhook/generate", async (req, res) => {
 
   setImmediate(async () => {
     try {
-      const result = await runGenerationPipeline({ prompt, brand, campaignType: campaignType||"auto", aspectRatio: aspectRatio||"1:1", mode: mode||"ai", imageModel: imageModel||process.env.DEFAULT_IMAGE_MODEL||"gpt-image-2", enhanceModel: enhanceModel||"gpt-4o", apiKey, req: { protocol:"https", get:()=>process.env.DOMAIN||"localhost:3001" } });
+      const result = await runGenerationPipeline({ prompt, brand, campaignType: campaignType||"auto", aspectRatio: aspectRatio||"1:1", mode: mode||"ai", imageModel: imageModel||process.env.DEFAULT_IMAGE_MODEL||"gpt-image-1.5", enhanceModel: enhanceModel||"gpt-4o", apiKey, req: { protocol:"https", get:()=>process.env.DOMAIN||"localhost:3001" } });
       const payload = { success:true, requestId, generationId:result.id, imageUrl:result.imageUrl, thumbnailUrl:result.thumbnailUrl, brandId:result.brandId, campaignType:result.campaignType, createdAt:result.createdAt };
       const fresh = readDB(); const idx = fresh.webhookLogs.findIndex((l)=>l.id===logId);
       if (idx>-1) Object.assign(fresh.webhookLogs[idx], { status:"success", ...payload }); writeDB(fresh);
@@ -383,7 +383,7 @@ app.post("/webhook/generate/sync", async (req, res) => {
   if (!apiKey) return res.status(400).json({ success: false, error: "OPENAI_API_KEY not configured" });
   const db = readDB(); const brand = brandId ? (db.brands[brandId]||{}) : (Object.values(db.brands)[0]||{});
   try {
-    const result = await runGenerationPipeline({ prompt, brand, campaignType:campaignType||"auto", aspectRatio:aspectRatio||"1:1", mode:mode||"ai", imageModel:imageModel||process.env.DEFAULT_IMAGE_MODEL||"gpt-image-2", enhanceModel:enhanceModel||"gpt-4o", apiKey, req });
+    const result = await runGenerationPipeline({ prompt, brand, campaignType:campaignType||"auto", aspectRatio:aspectRatio||"1:1", mode:mode||"ai", imageModel:imageModel||process.env.DEFAULT_IMAGE_MODEL||"gpt-image-1.5", enhanceModel:enhanceModel||"gpt-4o", apiKey, req });
     res.json({ success:true, requestId, generationId:result.id, imageUrl:result.imageUrl, thumbnailUrl:result.thumbnailUrl, brandId:result.brandId, campaignType:result.campaignType, createdAt:result.createdAt });
   } catch (err) { res.status(500).json({ success:false, error:err.message }); }
 });
@@ -394,7 +394,7 @@ app.get("/api/webhook/logs", (_, res) => { const db = readDB(); res.json({ logs:
 // HEALTH
 // ─────────────────────────────────────────────────────────
 
-app.get("/health", (_, res) => res.json({ status:"ok", version:"2.0.0", timestamp:new Date().toISOString(), services:{ openai:!!process.env.OPENAI_API_KEY }, defaultImageModel: process.env.DEFAULT_IMAGE_MODEL||"gpt-image-2" }));
+app.get("/health", (_, res) => res.json({ status:"ok", version:"2.0.0", timestamp:new Date().toISOString(), services:{ openai:!!process.env.OPENAI_API_KEY }, defaultImageModel: process.env.DEFAULT_IMAGE_MODEL||"gpt-image-1.5" }));
 
 // ─────────────────────────────────────────────────────────
 // SERVE FRONTEND IN PRODUCTION

@@ -78,7 +78,7 @@ the endpoint URL is **auto-shown** based on your live domain.
 
 | Service | Key | Used For |
 |---------|-----|----------|
-| OpenAI  | `OPENAI_API_KEY` | Prompt enhancement (GPT-4o) + Image generation (gpt-image-2) |
+| OpenAI  | `OPENAI_API_KEY` | Prompt enhancement (GPT-4o) + Image generation (gpt-image-1.5) |
 
 That's it. One key. No Anthropic.
 
@@ -87,7 +87,7 @@ That's it. One key. No Anthropic.
 ## Models Available
 
 ### Image Generation
-- `gpt-image-2` ← **Default, recommended**
+- `gpt-image-1.5` ← **Default, recommended**
 - `gpt-image-1`
 - `dall-e-3`
 - `dall-e-2`
