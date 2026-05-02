@@ -832,7 +832,7 @@ Respond ONLY with valid JSON — no markdown, no extra text:
 
   const handleGenerate = async () => {
     if (!prompt.trim()) { showToast("Please enter a prompt", "error"); return; }
-    if (!openAIKey)     { showToast("OpenAI API key required — go to API Settings", "error"); return; }
+    if (!openAIKey && openAIKey !== "__env_configured__")     { showToast("OpenAI API key required — go to API Settings", "error"); return; }
 
     setIsGenerating(true);
     setLogs([]);
@@ -967,7 +967,7 @@ Respond ONLY with valid JSON — no markdown, no extra text:
             </Card>
           )}
 
-          <Btn onClick={handleGenerate} loading={isGenerating} disabled={!prompt.trim() || !openAIKey} variant="primary" size="lg" full>
+          <Btn onClick={handleGenerate} loading={isGenerating} disabled={!prompt.trim() || (!openAIKey && openAIKey !== "__env_configured__")} variant="primary" size="lg" full>
             {isGenerating ? "Generating..." : <><Play size={15} /> Generate Poster</>}
           </Btn>
 
@@ -1241,7 +1241,7 @@ function WebhookSettings({ brand, openAIKey, imageModel, enhanceModel, showToast
   };
 
   const simulateWebhook = async () => {
-    if (!openAIKey) { showToast("OpenAI key required", "error"); return; }
+    if (!openAIKey && openAIKey !== "__env_configured__") { showToast("OpenAI key required", "error"); return; }
     setSimulating(true);
     const logEntry = { id: uid(), ts: new Date().toISOString(), status: "processing" };
     setWebhookLogs((l) => [logEntry, ...l]);
@@ -1487,10 +1487,32 @@ export default function SparkOs() {
   const [assets,       setAssets]       = useState({ logo: null, images: [], posters: [], docs: [] });
   const [history,      setHistory]      = useState([]);
   const [preview,      setPreview]      = useState(null);
-  const [openAIKey,    setOpenAIKey]    = useState("");
+  const [openAIKey,    setOpenAIKeyBase] = useState(() => localStorage.getItem("openai_key") || "");
   const [imageModel,   setImageModel]   = useState("gpt-image-1.5");   // ← default to gpt-image-1.5
   const [enhanceModel, setEnhanceModel] = useState("gpt-4o");
   const [toast,        setToast]        = useState(null);
+
+  // Persist key to localStorage & sync with backend
+  const setOpenAIKey = useCallback((key) => {
+    setOpenAIKeyBase(key);
+    localStorage.setItem("openai_key", key);
+  }, []);
+
+  // Check if backend has env key configured
+  useEffect(() => {
+    const checkConfig = async () => {
+      try {
+        const res = await fetch("/api/config/check-key");
+        const { keyConfigured } = await res.json();
+        if (keyConfigured && !openAIKey) {
+          setOpenAIKey("__env_configured__"); // Marker that env key exists
+        }
+      } catch (err) {
+        console.error("Config check failed:", err);
+      }
+    };
+    checkConfig();
+  }, []);
 
   const showToast = useCallback((msg, type = "success") => {
     setToast({ msg, type, id: uid() });

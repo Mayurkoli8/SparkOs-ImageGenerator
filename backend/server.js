@@ -298,6 +298,15 @@ app.get("/api/assets/:brandId", (req, res) => {
 // ─────────────────────────────────────────────────────────
 // ROUTES — GENERATE
 // ─────────────────────────────────────────────────────────
+// CONFIG CHECK
+// ─────────────────────────────────────────────────────────
+
+app.get("/api/config/check-key", (req, res) => {
+  const hasEnvKey = !!process.env.OPENAI_API_KEY;
+  res.json({ keyConfigured: hasEnvKey });
+});
+
+// ─────────────────────────────────────────────────────────
 
 app.post("/api/generate", async (req, res) => {
   const { brandId, prompt, campaignType, aspectRatio, mode, imageModel, enhanceModel } = req.body;
