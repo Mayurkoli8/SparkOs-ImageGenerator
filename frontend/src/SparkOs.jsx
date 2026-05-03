@@ -1,77 +1,176 @@
+/**
+ * SparkOs v3 — Classic Dark Theme · Multi-brand · Asset Caching · Password Auth
+ * Fixes: aspect ratios, no logo in AI image, creative text, IndexedDB asset cache
+ */
+
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
   LayoutDashboard, Building2, FolderOpen, Sparkles, Image as ImageIcon,
   History, Webhook, Settings, Upload, Download, Copy, CheckCircle2,
   Key, Trash2, Eye, EyeOff, Star, TrendingUp, Clock, AlertCircle,
-  FileText, Play, CheckCheck, X, Layers, Link2, RefreshCw
+  FileText, Play, CheckCheck, X, Layers, Lock, Plus, ChevronDown,
+  LogOut, Pencil, Users, Shield, RefreshCw, Info
 } from "lucide-react";
 
-// ═══════════════════════════════════════════════════════
-// CONSTANTS
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────
+
+const BACKEND = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
+
+const IMAGE_MODELS = [
+  { value: "gpt-image-1", label: "GPT Image 1",      desc: "Current default · Recommended" },
+  { value: "gpt-image-2", label: "GPT Image 2",      desc: "Requires special OpenAI access" },
+  { value: "dall-e-3",    label: "DALL-E 3",          desc: "High quality HD mode" },
+  { value: "dall-e-2",    label: "DALL-E 2",          desc: "Faster · Lower cost" },
+];
+
+const ENHANCE_MODELS = [
+  { value: "gpt-4o",      label: "GPT-4o",      desc: "Recommended · Best results" },
+  { value: "gpt-4o-mini", label: "GPT-4o Mini", desc: "Faster · Lower cost" },
+  { value: "gpt-4-turbo", label: "GPT-4 Turbo", desc: "Powerful alternative" },
+];
 
 const CAMPAIGN_TYPES = [
-  { value: "auto", label: "Auto Detect" },
-  { value: "festival", label: "Festival Post" },
-  { value: "new_year", label: "New Year" },
-  { value: "property_launch", label: "Property Launch" },
-  { value: "offer", label: "Offer Promotion" },
-  { value: "site_visit", label: "Site Visit Invite" },
-  { value: "possession", label: "Possession Update" },
-  { value: "milestone", label: "Milestone Announcement" },
-  { value: "brand_awareness", label: "Brand Awareness" },
-  { value: "testimonial", label: "Testimonial" },
-  { value: "project_highlight", label: "Project Highlight" },
+  { value: "auto",                label: "Auto Detect" },
+  { value: "festival",            label: "Festival Post" },
+  { value: "new_year",            label: "New Year" },
+  { value: "property_launch",     label: "Property Launch" },
+  { value: "offer",               label: "Offer Promotion" },
+  { value: "site_visit",          label: "Site Visit Invite" },
+  { value: "possession",          label: "Possession Update" },
+  { value: "milestone",           label: "Milestone Announcement" },
+  { value: "brand_awareness",     label: "Brand Awareness" },
+  { value: "testimonial",         label: "Testimonial" },
+  { value: "project_highlight",   label: "Project Highlight" },
   { value: "construction_update", label: "Construction Update" },
 ];
 
 const ASPECT_RATIOS = [
-  { value: "1:1",  label: "1:1",  size: "1024x1024", desc: "Square Feed" },
-  { value: "4:5",  label: "4:5",  size: "1024x1024", desc: "Portrait Feed" },
-  { value: "9:16", label: "9:16", size: "1024x1792", desc: "Stories/Reels" },
-  { value: "16:9", label: "16:9", size: "1792x1024", desc: "Landscape" },
+  { value: "1:1",  desc: "Square Feed" },
+  { value: "4:5",  desc: "Portrait Feed" },
+  { value: "9:16", desc: "Stories / Reels" },
+  { value: "16:9", desc: "Landscape" },
 ];
+
+// Correct size per model + ratio
+function getImageSize(ratio, model) {
+  const isGpt = model === "gpt-image-1" || model === "gpt-image-2";
+  const isDe3 = model === "dall-e-3";
+  const map = {
+    "1:1":  { gpt: "1024x1024", de3: "1024x1024", de2: "1024x1024" },
+    "4:5":  { gpt: "1024x1536", de3: "1024x1792", de2: "1024x1024" },
+    "9:16": { gpt: "1024x1536", de3: "1024x1792", de2: "1024x1024" },
+    "16:9": { gpt: "1536x1024", de3: "1792x1024", de2: "1024x1024" },
+  };
+  const e = map[ratio] || map["1:1"];
+  return isGpt ? e.gpt : isDe3 ? e.de3 : e.de2;
+}
 
 const BRAND_TYPES = [
-  "Premium Real Estate", "Luxury Apartments", "Affordable Housing",
-  "Commercial Real Estate", "Villa Projects", "Plotted Development",
+  "Premium Real Estate","Luxury Apartments","Affordable Housing",
+  "Commercial Real Estate","Villa Projects","Plotted Development",
 ];
 
-// ── All available image models ──────────────────────────
-const IMAGE_MODELS = [
-  { value: "gpt-image-1",  label: "GPT Image 1",          desc: "OpenAI multimodal image model" },
-  { value: "gpt-image-1.5",  label: "GPT Image 1.5 ✦ Recommended", desc: "Best quality, most detailed" },
-  { value: "dall-e-3",     label: "DALL-E 3",              desc: "High quality, HD mode available" },
-  { value: "dall-e-2",     label: "DALL-E 2",              desc: "Faster, lower cost" },
-];
+// ─────────────────────────────────────────────────────────────
+// THEME — SparkOs Classic Dark · Red accent
+// ─────────────────────────────────────────────────────────────
 
-// ── GPT models used for prompt enhancement ──────────────
-const ENHANCE_MODELS = [
-  { value: "gpt-4o",       label: "GPT-4o (Recommended)" },
-  { value: "gpt-4o-mini",  label: "GPT-4o Mini (Faster)"  },
-  { value: "gpt-4-turbo",  label: "GPT-4 Turbo"           },
-];
+const C = {
+  bg:          "#080808",
+  sidebar:     "#0c0c0c",
+  card:        "#111111",
+  input:       "#0c0c0c",
+  border:      "#202020",
+  borderSub:   "#181818",
+  text:        "#eeeeee",
+  textSec:     "#777777",
+  textMuted:   "#404040",
+  red:         "#e53935",
+  redH:        "#ef5350",
+  redD:        "rgba(229,57,53,0.10)",
+  redB:        "rgba(229,57,53,0.20)",
+  green:       "#43a047",
+  greenD:      "rgba(67,160,71,0.10)",
+  greenB:      "rgba(67,160,71,0.22)",
+  blue:        "#1e88e5",
+};
 
-// ═══════════════════════════════════════════════════════
-// API UTILITIES  — 100% OpenAI, zero Anthropic
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
+// INDEXEDDB ASSET CACHE
+// ─────────────────────────────────────────────────────────────
 
-/** Prompt enhancement via OpenAI Chat Completions */
-async function enhanceWithOpenAI(systemPrompt, userMsg, apiKey, gptModel = "gpt-4o") {
+const IDB_NAME = "sparkos_assets";
+const IDB_STORE = "files";
+
+function openIDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE, { keyPath: "key" });
+    req.onsuccess = e => res(e.target.result);
+    req.onerror   = () => rej(req.error);
+  });
+}
+
+async function cacheAsset(brandId, fileId, name, dataUrl) {
+  try {
+    const db  = await openIDB();
+    const tx  = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).put({ key: `${brandId}:${fileId}`, brandId, fileId, name, dataUrl, ts: Date.now() });
+    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+  } catch(e) { console.warn("IDB cache write failed:", e); }
+}
+
+async function getCachedAsset(brandId, fileId) {
+  try {
+    const db  = await openIDB();
+    const tx  = db.transaction(IDB_STORE, "readonly");
+    const req = tx.objectStore(IDB_STORE).get(`${brandId}:${fileId}`);
+    return await new Promise((res, rej) => { req.onsuccess = () => res(req.result?.dataUrl || null); req.onerror = rej; });
+  } catch { return null; }
+}
+
+async function getAllCachedForBrand(brandId) {
+  try {
+    const db    = await openIDB();
+    const tx    = db.transaction(IDB_STORE, "readonly");
+    const store = tx.objectStore(IDB_STORE);
+    const all   = await new Promise((res, rej) => { const r = store.getAll(); r.onsuccess = () => res(r.result); r.onerror = rej; });
+    return all.filter(a => a.brandId === brandId);
+  } catch { return []; }
+}
+
+async function clearBrandCache(brandId) {
+  try {
+    const db   = await openIDB();
+    const tx   = db.transaction(IDB_STORE, "readwrite");
+    const store = tx.objectStore(IDB_STORE);
+    const all  = await new Promise((res, rej) => { const r = store.getAll(); r.onsuccess = () => res(r.result); r.onerror = rej; });
+    for (const item of all.filter(a => a.brandId === brandId)) store.delete(item.key);
+  } catch {}
+}
+
+// ─────────────────────────────────────────────────────────────
+// API + OPENAI HELPERS
+// ─────────────────────────────────────────────────────────────
+
+async function api(path, opts = {}) {
+  const res  = await fetch(`${BACKEND}${path}`, {
+    headers: { "Content-Type": "application/json", ...opts.headers },
+    ...opts,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `API ${res.status}`);
+  return data;
+}
+
+async function enhanceWithGPT(systemPrompt, userMsg, apiKey, model = "gpt-4o") {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
+    method:  "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: gptModel,
-      max_tokens: 900,
-      temperature: 0.7,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user",   content: userMsg },
-      ],
+      model, max_tokens: 1000, temperature: 0.75,
+      messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userMsg }],
     }),
   });
   const data = await res.json();
@@ -79,1131 +178,1230 @@ async function enhanceWithOpenAI(systemPrompt, userMsg, apiKey, gptModel = "gpt-
   return data.choices[0].message.content;
 }
 
-/** Image generation via OpenAI Images API */
-async function generateImage(prompt, size, apiKey, model) {
-  // gpt-image-1 and gpt-image-1.5 share the same endpoint but slightly different params
-  const isGptImage = model === "gpt-image-1" || model === "gpt-image-1.5";
-
-  const body = isGptImage
+async function generateImageFrontend(prompt, size, apiKey, model) {
+  const isGpt = model === "gpt-image-1" || model === "gpt-image-2";
+  const body  = isGpt
     ? { model, prompt, n: 1, size }
-    : {
-        model,
-        prompt,
-        n: 1,
-        size,
-        quality: "hd",
-        response_format: "b64_json",
-      };
-
-  const res = await fetch("https://api.openai.com/v1/images/generations", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
+    : { model, prompt, n: 1, size, quality: "hd", response_format: "b64_json" };
+  const res  = await fetch("https://api.openai.com/v1/images/generations", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify(body),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error?.message || "Image generation failed");
-
-  const b64 = data.data[0].b64_json || data.data[0].b64;
-  if (b64) return `data:image/png;base64,${b64}`;
-
-  // Some models return a URL instead of b64
-  return data.data[0].url || "";
+  const b64  = data.data[0].b64_json || data.data[0].b64;
+  return b64 ? `data:image/png;base64,${b64}` : data.data[0].url;
 }
 
-// ═══════════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
+// CANVAS LOGO OVERLAY
+// ─────────────────────────────────────────────────────────────
 
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = (e) => resolve(e.target.result);
-    r.onerror = reject;
-    r.readAsDataURL(file);
-  });
-}
-
-function uid() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-}
-
-function fmtDate(iso) {
-  return new Date(iso).toLocaleString("en-IN", {
-    day: "2-digit", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
-}
-
-/** Returns the base URL of this running app — used to show webhook endpoint */
-function getAppBaseUrl() {
-  return `${window.location.protocol}//${window.location.host}`;
-}
-
-// ═══════════════════════════════════════════════════════
-// CANVAS BRAND OVERLAY
-// ═══════════════════════════════════════════════════════
-
-function drawRoundRect(ctx, x, y, w, h, r) {
+function rrect(ctx, x, y, w, h, r) {
   ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
 }
 
-async function applyBrandOverlay(baseDataUrl, brand, logoDataUrl) {
-  const loadImg = (src) =>
-    new Promise((res, rej) => {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload  = () => res(img);
-      img.onerror = () => rej(new Error("Image load failed"));
-      img.src = src;
-    });
-
+async function applyLogoOverlay(baseDataUrl, brand, logoDataUrl, position) {
+  const load = src => new Promise((res, rej) => {
+    const img = new Image(); img.crossOrigin = "anonymous";
+    img.onload = () => res(img); img.onerror = () => rej(); img.src = src;
+  });
   const canvas = document.createElement("canvas");
-  canvas.width  = 1080;
-  canvas.height = 1080;
+  canvas.width = canvas.height = 1080;
   const ctx = canvas.getContext("2d");
-
   try {
-    const base = await loadImg(baseDataUrl);
-    ctx.drawImage(base, 0, 0, 1080, 1080);
-
-    // Dark gradient at bottom
-    const grad = ctx.createLinearGradient(0, 650, 0, 1080);
-    grad.addColorStop(0,   "rgba(0,0,0,0)");
-    grad.addColorStop(0.4, "rgba(0,0,0,0.65)");
-    grad.addColorStop(1,   "rgba(0,0,0,0.93)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 650, 1080, 430);
-
-    // Brand accent bar at bottom
-    ctx.fillStyle = brand.primaryColor || "#C9A96E";
-    ctx.fillRect(0, 1070, 1080, 10);
-
-    ctx.shadowColor = "rgba(0,0,0,0.4)";
-    ctx.shadowBlur  = 6;
-
-    // Company name
-    ctx.fillStyle = "#FFFFFF";
-    ctx.font = "bold 46px Georgia, serif";
-    ctx.fillText(brand.companyName || "Your Company", 44, 890);
-
-    // Tagline
-    if (brand.tagline && brand.showTagline !== false) {
-      ctx.font      = "italic 26px Georgia, serif";
-      ctx.fillStyle = brand.primaryColor || "#C9A96E";
-      ctx.fillText(brand.tagline, 44, 928);
+    ctx.drawImage(await load(baseDataUrl), 0, 0, 1080, 1080);
+    if (logoDataUrl) {
+      const logo = await load(logoDataUrl);
+      const pos  = position || brand.logoPlacement || "top-right";
+      const lw   = 110, lh = 110, pad = 16;
+      let lx, ly;
+      if (pos.includes("top"))    ly = pad; else ly = 1080 - lh - pad;
+      if (pos.includes("left"))   lx = pad;
+      else if (pos.includes("center")) lx = (1080 - lw) / 2;
+      else lx = 1080 - lw - pad;
+      ctx.shadowColor = "rgba(0,0,0,0.35)"; ctx.shadowBlur = 18;
+      ctx.fillStyle   = "rgba(255,255,255,0.97)";
+      rrect(ctx, lx - 12, ly - 12, lw + 24, lh + 24, 14); ctx.fill();
+      ctx.shadowBlur  = 0;
+      ctx.drawImage(logo, lx, ly, lw, lh);
     }
-
-    // Contact
-    ctx.shadowBlur = 3;
-    ctx.font       = "22px Arial, sans-serif";
-    ctx.fillStyle  = "rgba(255,255,255,0.85)";
-    let yPos = 968;
-    if (brand.phone && brand.showPhone !== false) {
-      ctx.fillText(`\u260E  ${brand.phone}`, 44, yPos);
-      yPos += 34;
-    }
-    if (brand.website && brand.showWebsite !== false) {
-      ctx.fillStyle = "rgba(220,220,220,0.8)";
-      ctx.font      = "20px Arial, sans-serif";
-      ctx.fillText(`\u{1F310}  ${brand.website}`, 44, yPos);
-    }
-
-    // Logo top-right
-    if (logoDataUrl && brand.showLogo !== false) {
-      try {
-        const logo = await loadImg(logoDataUrl);
-        const lx = 1080 - 120, ly = 20, lw = 100, lh = 100;
-        ctx.shadowBlur = 15;
-        ctx.fillStyle  = "rgba(255,255,255,0.95)";
-        drawRoundRect(ctx, lx - 8, ly - 8, lw + 16, lh + 16, 12);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.drawImage(logo, lx, ly, lw, lh);
-      } catch {}
-    }
-
-    return canvas.toDataURL("image/png", 0.93);
-  } catch {
-    return baseDataUrl;
-  }
+    return canvas.toDataURL("image/png", 0.95);
+  } catch { return baseDataUrl; }
 }
 
-// ═══════════════════════════════════════════════════════
-// UI ATOMS
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
+// MISC HELPERS
+// ─────────────────────────────────────────────────────────────
 
-function Btn({ children, onClick, variant = "primary", size = "md", disabled, loading, full, className = "" }) {
-  const sz = { sm: "px-3 py-1.5 text-xs", md: "px-4 py-2 text-sm", lg: "px-6 py-2.5 text-sm" }[size];
-  const v = {
-    primary:   "bg-amber-500 text-gray-950 hover:bg-amber-400 font-semibold disabled:opacity-40",
-    secondary: "bg-gray-800 text-gray-200 border border-gray-700 hover:bg-gray-700 disabled:opacity-40",
-    ghost:     "text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 disabled:opacity-40",
-    danger:    "bg-red-950 text-red-400 border border-red-900/60 hover:bg-red-900/40",
-    success:   "bg-green-950 text-green-400 border border-green-900/60",
+function uid()  { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function fmtDate(iso) {
+  return new Date(iso).toLocaleString("en-IN", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
+}
+async function sha256(str) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
+}
+async function fileToDataUrl(file) {
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file); });
+}
+
+// ─────────────────────────────────────────────────────────────
+// UI ATOMS
+// ─────────────────────────────────────────────────────────────
+
+const SI = {
+  input: { background: C.input, border: `1px solid ${C.border}`, borderRadius: 7, padding: "8px 12px", color: C.text, fontSize: 13, width: "100%", outline: "none", fontFamily: "inherit" },
+  label: { display: "block", fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 },
+};
+
+const focus = (e, on) => { e.target.style.borderColor = on ? C.red : C.border; };
+
+function Btn({ children, onClick, variant = "primary", size = "md", disabled, loading, full, style = {} }) {
+  const pad = { sm: "7px 14px", md: "9px 18px", lg: "11px 26px" }[size];
+  const fs  = size === "sm" ? 12 : 13;
+  const vs  = {
+    primary:   { background: C.red,    color: "#fff",    border: "none" },
+    secondary: { background: "transparent", color: C.textSec, border: `1px solid ${C.border}` },
+    ghost:     { background: "transparent", color: C.textMuted, border: "none" },
+    danger:    { background: C.redD,   color: C.red,     border: `1px solid ${C.redB}` },
+    success:   { background: C.greenD, color: C.green,   border: `1px solid ${C.greenB}` },
   }[variant];
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled || loading}
-      className={`inline-flex items-center gap-2 rounded-lg transition-all focus:outline-none ${sz} ${v} ${full ? "w-full justify-center" : ""} ${className}`}
-    >
-      {loading && <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />}
+    <button onClick={onClick} disabled={disabled || loading}
+      style={{ display:"inline-flex",alignItems:"center",gap:7,borderRadius:7,cursor:disabled||loading?"not-allowed":"pointer",fontWeight:600,fontSize:fs,padding:pad,transition:"all .15s",outline:"none",width:full?"100%":"auto",justifyContent:"center",opacity:disabled||loading?.5:1,fontFamily:"inherit",...vs,...style }}>
+      {loading && <span style={{width:11,height:11,border:"2px solid currentColor",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .7s linear infinite",display:"inline-block"}}/>}
       {children}
     </button>
   );
 }
 
-function Inp({ value, onChange, placeholder, type = "text", className = "", readOnly }) {
-  return (
-    <input
-      type={type}
-      value={value}
-      onChange={onChange ? (e) => onChange(e.target.value) : undefined}
-      placeholder={placeholder}
-      readOnly={readOnly}
-      className={`w-full bg-gray-900 border border-gray-700/60 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-amber-500/70 transition-colors ${readOnly ? "opacity-60 cursor-default" : ""} ${className}`}
-    />
-  );
+function Inp({ value, onChange, placeholder, type = "text", readOnly, mono }) {
+  return <input type={type} value={value} onChange={onChange ? e => onChange(e.target.value) : undefined}
+    placeholder={placeholder} readOnly={readOnly}
+    style={{ ...SI.input, fontFamily: mono ? "monospace" : "inherit", opacity: readOnly ? .5 : 1 }}
+    onFocus={e => focus(e, true)} onBlur={e => focus(e, false)} />;
 }
 
 function Sel({ value, onChange, options }) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-gray-900 border border-gray-700/60 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500/70 transition-colors"
-    >
-      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
-  );
+  return <select value={value} onChange={e => onChange(e.target.value)}
+    style={{ ...SI.input, cursor: "pointer" }} onFocus={e => focus(e, true)} onBlur={e => focus(e, false)}>
+    {options.map(o => <option key={o.value} value={o.value} style={{ background: "#111", color: C.text }}>{o.label}</option>)}
+  </select>;
 }
 
-function Txta({ value, onChange, placeholder, rows = 3, mono = false }) {
-  return (
-    <textarea
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      rows={rows}
-      className={`w-full bg-gray-900 border border-gray-700/60 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-amber-500/70 transition-colors resize-none ${mono ? "font-mono text-green-400" : ""}`}
-    />
-  );
+function Txta({ value, onChange, placeholder, rows = 3, mono }) {
+  return <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={rows}
+    style={{ ...SI.input, resize: "none", lineHeight: 1.65, fontFamily: mono ? "monospace" : "inherit" }}
+    onFocus={e => focus(e, true)} onBlur={e => focus(e, false)} />;
 }
 
-function Lbl({ children }) {
-  return <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-widest mb-1.5">{children}</label>;
+function Lbl({ children }) { return <label style={SI.label}>{children}</label>; }
+
+function Card({ children, style = {} }) {
+  return <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, ...style }}>{children}</div>;
 }
 
-function Card({ children, className = "" }) {
-  return <div className={`bg-gray-900 border border-gray-800/80 rounded-xl ${className}`}>{children}</div>;
-}
+function CP({ children, style = {} }) { return <Card style={{ padding: 20, ...style }}>{children}</Card>; }
 
-function Stat({ label, value, icon: Icon, color = "amber" }) {
-  const colors = {
-    amber:  "text-amber-400 bg-amber-500/10",
-    green:  "text-green-400 bg-green-500/10",
-    blue:   "text-blue-400 bg-blue-500/10",
-    purple: "text-purple-400 bg-purple-500/10",
-  };
-  return (
-    <Card className="p-4">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-gray-500 uppercase tracking-wider">{label}</span>
-        <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${colors[color]}`}>
-          <Icon size={14} className={colors[color].split(" ")[0]} />
-        </div>
-      </div>
-      <div className="text-2xl font-bold text-gray-100">{value}</div>
-    </Card>
-  );
-}
-
-function Badge({ children, color = "amber" }) {
-  const c = {
-    amber:  "bg-amber-900/30 text-amber-400 border-amber-800/40",
-    green:  "bg-green-900/30 text-green-400 border-green-800/40",
-    blue:   "bg-blue-900/30 text-blue-400 border-blue-800/40",
-    red:    "bg-red-900/30 text-red-400 border-red-800/40",
-    gray:   "bg-gray-800/60 text-gray-400 border-gray-700/40",
-    purple: "bg-purple-900/30 text-purple-400 border-purple-800/40",
+function Badge({ children, color = "red" }) {
+  const cc = {
+    red:   { bg: C.redD,   text: C.red,   border: C.redB },
+    green: { bg: C.greenD, text: C.green, border: C.greenB },
+    gray:  { bg: "#1a1a1a", text: C.textSec, border: C.border },
+    blue:  { bg: "rgba(30,136,229,.1)", text: "#42a5f5", border: "rgba(30,136,229,.2)" },
   }[color];
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${c}`}>{children}</span>;
+  return <span style={{ display:"inline-flex",alignItems:"center",padding:"2px 8px",borderRadius:4,fontSize:11,fontWeight:600,background:cc.bg,color:cc.text,border:`1px solid ${cc.border}` }}>{children}</span>;
 }
 
 function Toast({ msg, type, onClose }) {
   useEffect(() => { const t = setTimeout(onClose, 4000); return () => clearTimeout(t); }, [onClose]);
   return (
-    <div className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border text-sm shadow-2xl max-w-sm ${type === "success" ? "bg-green-950 border-green-800/60 text-green-300" : "bg-red-950 border-red-800/60 text-red-300"}`}>
-      {type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-      <span className="flex-1">{msg}</span>
-      <button onClick={onClose} className="opacity-60 hover:opacity-100"><X size={14} /></button>
+    <div style={{ position:"fixed",bottom:20,right:20,zIndex:9999,display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderRadius:10,border:`1px solid ${type==="success"?C.greenB:C.redB}`,background:type==="success"?"#0b1b0c":"#1b0c0c",color:type==="success"?C.green:C.red,fontSize:13,boxShadow:"0 8px 40px rgba(0,0,0,.7)",maxWidth:360 }}>
+      {type === "success" ? <CheckCircle2 size={15}/> : <AlertCircle size={15}/>}
+      <span style={{ flex: 1 }}>{msg}</span>
+      <button onClick={onClose} style={{ background:"none",border:"none",color:"inherit",cursor:"pointer",opacity:.6 }}><X size={13}/></button>
     </div>
   );
 }
 
-function DropZone({ onFiles, accept, multiple = false, children }) {
+function DropZone({ onFiles, accept, multiple, children }) {
   const [drag, setDrag] = useState(false);
   const ref = useRef();
   return (
-    <div
-      className={`border-2 border-dashed rounded-xl cursor-pointer transition-all ${drag ? "border-amber-500 bg-amber-500/5" : "border-gray-700/70 hover:border-gray-600"}`}
-      onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-      onDragLeave={() => setDrag(false)}
-      onDrop={(e) => { e.preventDefault(); setDrag(false); onFiles(Array.from(e.dataTransfer.files)); }}
-      onClick={() => ref.current?.click()}
-    >
-      <input ref={ref} type="file" accept={accept} multiple={multiple} className="hidden"
-        onChange={(e) => onFiles(Array.from(e.target.files || []))} />
+    <div style={{ border:`2px dashed ${drag?C.red:C.border}`,borderRadius:10,cursor:"pointer",background:drag?C.redD:"transparent",transition:"all .15s" }}
+      onDragOver={e => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
+      onDrop={e => { e.preventDefault(); setDrag(false); onFiles(Array.from(e.dataTransfer.files)); }}
+      onClick={() => ref.current?.click()}>
+      <input ref={ref} type="file" accept={accept} multiple={multiple} style={{ display:"none" }}
+        onChange={e => onFiles(Array.from(e.target.files || []))} />
       {children}
     </div>
   );
 }
 
-function ColorPicker({ value, onChange, label }) {
+function RCard({ selected, onClick, label, desc, badge }) {
   return (
-    <div className="flex items-center gap-2">
-      <input type="color" value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-9 h-9 rounded-lg cursor-pointer border-0 bg-transparent p-0.5" />
-      <div className="flex-1"><Inp value={value} onChange={onChange} placeholder="#C9A96E" /></div>
-      {label && <span className="text-xs text-gray-500 whitespace-nowrap">{label}</span>}
+    <button onClick={onClick} style={{ width:"100%",textAlign:"left",background:selected?C.redD:C.input,border:`1px solid ${selected?C.red:C.border}`,borderRadius:8,padding:"10px 14px",cursor:"pointer",display:"flex",alignItems:"flex-start",gap:10,transition:"all .15s" }}>
+      <div style={{ width:14,height:14,borderRadius:"50%",border:`2px solid ${selected?C.red:C.border}`,marginTop:2,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+        {selected && <div style={{ width:6,height:6,borderRadius:"50%",background:C.red }}/>}
+      </div>
+      <div style={{ flex:1 }}>
+        <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+          <span style={{ fontSize:13,fontWeight:600,color:selected?C.red:C.text }}>{label}</span>
+          {badge && <Badge color="red">{badge}</Badge>}
+        </div>
+        {desc && <p style={{ fontSize:11,color:C.textMuted,marginTop:3,lineHeight:1.5 }}>{desc}</p>}
+      </div>
+    </button>
+  );
+}
+
+function Stat({ label, value, icon: Icon, color = "red" }) {
+  const col = { red: C.red, green: C.green, blue: C.blue, purple: "#ab47bc" }[color];
+  return (
+    <CP style={{ display:"flex",flexDirection:"column",gap:8 }}>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+        <span style={{ fontSize:11,color:C.textMuted,textTransform:"uppercase",letterSpacing:".06em" }}>{label}</span>
+        <div style={{ width:28,height:28,borderRadius:6,background:`${col}18`,display:"flex",alignItems:"center",justifyContent:"center" }}>
+          <Icon size={13} color={col}/>
+        </div>
+      </div>
+      <span style={{ fontSize:26,fontWeight:700,color:C.text }}>{value}</span>
+    </CP>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// LOGIN
+// ─────────────────────────────────────────────────────────────
+
+function Login({ onLogin }) {
+  const [pw,    setPw]    = useState("");
+  const [show,  setShow]  = useState(false);
+  const [err,   setErr]   = useState("");
+  const [busy,  setBusy]  = useState(false);
+
+  const login = async () => {
+    if (!pw) { setErr("Enter your password"); return; }
+    setBusy(true); setErr("");
+    try {
+      const hash = await sha256(pw);
+      const res  = await api("/api/auth/login", { method:"POST", body: JSON.stringify({ hash }) });
+      if (res.success) { sessionStorage.setItem("ss", "1"); onLogin(); }
+      else setErr("Incorrect password");
+    } catch { setErr("Cannot reach server — make sure backend is running"); }
+    setBusy(false);
+  };
+
+  return (
+    <div style={{ minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center" }}>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}} input::placeholder,textarea::placeholder{color:${C.textMuted}}`}</style>
+      <div style={{ width:380,padding:44,background:C.card,border:`1px solid ${C.border}`,borderRadius:16,boxShadow:"0 24px 80px rgba(0,0,0,.8)" }}>
+        <div style={{ textAlign:"center",marginBottom:36 }}>
+          <img src="/SparkOs_Logo_2.png" alt="SparkOs" style={{ height:38,width:"auto",marginBottom:18 }} onError={e=>{e.target.style.display="none";}}/>
+          <p style={{ fontSize:13,color:C.textSec }}>Sign in to your workspace</p>
+        </div>
+        <Lbl>Password</Lbl>
+        <div style={{ position:"relative",marginBottom:12 }}>
+          <input type={show?"text":"password"} value={pw}
+            onChange={e => setPw(e.target.value)} onKeyDown={e => e.key==="Enter" && login()}
+            placeholder="Enter password" autoFocus
+            style={{ ...SI.input, paddingRight:42 }}
+            onFocus={e => focus(e,true)} onBlur={e => focus(e,false)} />
+          <button onClick={() => setShow(!show)} style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.textMuted,cursor:"pointer" }}>
+            {show ? <EyeOff size={14}/> : <Eye size={14}/>}
+          </button>
+        </div>
+        {err && <p style={{ fontSize:12,color:C.red,marginBottom:12,display:"flex",alignItems:"center",gap:6 }}><AlertCircle size={12}/>{err}</p>}
+        <Btn onClick={login} loading={busy} full style={{ marginTop:4,padding:"11px 0" }}>
+          <Lock size={14}/> Sign In
+        </Btn>
+        <p style={{ fontSize:11,color:C.textMuted,textAlign:"center",marginTop:20 }}>
+          Default password: <code style={{ background:"#1a1a1a",padding:"2px 7px",borderRadius:4,color:C.textSec }}>sparkos2024</code>
+        </p>
+      </div>
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 // SIDEBAR
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 
 const NAV = [
-  { k: "dashboard", label: "Dashboard",    icon: LayoutDashboard },
-  { k: "brand",     label: "Brand Setup",  icon: Building2 },
-  { k: "assets",    label: "Assets",       icon: FolderOpen },
-  { k: "studio",    label: "Prompt Studio",icon: Sparkles },
-  { k: "preview",   label: "Preview",      icon: ImageIcon },
-  { k: "history",   label: "History",      icon: History },
-  { k: "webhook",   label: "Webhook",      icon: Webhook },
-  { k: "settings",  label: "API Settings", icon: Settings },
+  { k:"dashboard", label:"Dashboard",     icon: LayoutDashboard },
+  { k:"brands",    label:"Brands",        icon: Users },
+  { k:"assets",    label:"Assets",        icon: FolderOpen },
+  { k:"studio",    label:"Prompt Studio", icon: Sparkles },
+  { k:"preview",   label:"Preview",       icon: ImageIcon },
+  { k:"history",   label:"History",       icon: History },
+  { k:"webhook",   label:"Webhook",       icon: Webhook },
+  { k:"settings",  label:"Settings",      icon: Settings },
 ];
 
-function Sidebar({ active, setActive, histLen, hasKey, hasBrand }) {
+function Sidebar({ active, setActive, brands, activeBrand, setActiveBrand, histLen, hasKey, onLogout }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+  useEffect(() => {
+    const fn = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, []);
+
   return (
-    <aside className="w-52 bg-gray-950 border-r border-gray-800/80 flex flex-col shrink-0 h-screen">
-      <div className="p-4 border-b border-gray-800/80">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg">
-            <Sparkles size={15} className="text-gray-950" />
-          </div>
-          <div>
-            <div className="text-sm font-bold text-gray-100 leading-none">SparkOs</div>
-            <div className="text-[10px] text-gray-500 mt-0.5">Image Studio</div>
-          </div>
-        </div>
+    <aside style={{ width:210,background:C.sidebar,borderRight:`1px solid ${C.borderSub}`,display:"flex",flexDirection:"column",height:"100vh",flexShrink:0 }}>
+      {/* Logo */}
+      <div style={{ padding:"16px 14px 12px",borderBottom:`1px solid ${C.borderSub}` }}>
+        <img src="/SparkOs_Logo_2.png" alt="SparkOs" style={{ height:28,width:"auto" }} onError={e=>{e.target.style.display="none";}}/>
       </div>
 
-      <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
+      {/* Brand switcher */}
+      <div ref={ref} style={{ padding:"10px 10px 8px",borderBottom:`1px solid ${C.borderSub}`,position:"relative" }}>
+        <p style={{ fontSize:10,color:C.textMuted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5,paddingLeft:4 }}>Active Brand</p>
+        <button onClick={() => setOpen(!open)}
+          style={{ width:"100%",background:C.input,border:`1px solid ${C.border}`,borderRadius:7,padding:"7px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",gap:6 }}>
+          <div style={{ display:"flex",alignItems:"center",gap:7,minWidth:0 }}>
+            <div style={{ width:7,height:7,borderRadius:"50%",background:activeBrand?C.red:C.textMuted,flexShrink:0 }}/>
+            <span style={{ fontSize:12,fontWeight:600,color:activeBrand?C.text:C.textMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+              {activeBrand?.companyName || "Select Brand"}
+            </span>
+          </div>
+          <ChevronDown size={12} color={C.textMuted} style={{ transform:open?"rotate(180deg)":"none",transition:"transform .2s",flexShrink:0 }}/>
+        </button>
+
+        {open && (
+          <div style={{ position:"absolute",left:10,right:10,top:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:8,zIndex:50,overflow:"hidden",boxShadow:"0 8px 32px rgba(0,0,0,.7)" }}>
+            {brands.length===0 && <p style={{ padding:"10px 12px",fontSize:12,color:C.textMuted }}>No brands yet</p>}
+            {brands.map(b => (
+              <button key={b.id} onClick={() => { setActiveBrand(b); setOpen(false); localStorage.setItem("ab",b.id); }}
+                style={{ width:"100%",textAlign:"left",padding:"9px 12px",background:activeBrand?.id===b.id?C.redD:"transparent",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:8,borderBottom:`1px solid ${C.borderSub}` }}>
+                <div style={{ width:6,height:6,borderRadius:"50%",background:activeBrand?.id===b.id?C.red:C.textMuted }}/>
+                <span style={{ fontSize:12,color:activeBrand?.id===b.id?C.red:C.text,fontWeight:activeBrand?.id===b.id?600:400 }}>{b.companyName}</span>
+              </button>
+            ))}
+            <button onClick={() => { setActive("brands"); setOpen(false); }}
+              style={{ width:"100%",textAlign:"left",padding:"9px 12px",background:"transparent",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:7 }}>
+              <Plus size={11} color={C.textSec}/><span style={{ fontSize:12,color:C.textSec }}>Add Brand</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Nav */}
+      <nav style={{ flex:1,padding:"8px",overflowY:"auto" }}>
         {NAV.map(({ k, label, icon: Icon }) => (
           <button key={k} onClick={() => setActive(k)}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-all ${active === k ? "bg-amber-500/12 text-amber-400 border border-amber-500/20 font-medium" : "text-gray-500 hover:text-gray-300 hover:bg-gray-800/50"}`}>
-            <Icon size={15} />
-            <span>{label}</span>
-            {k === "history" && histLen > 0 && (
-              <span className="ml-auto text-[10px] bg-gray-800 text-gray-400 rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{histLen}</span>
-            )}
+            style={{ width:"100%",display:"flex",alignItems:"center",gap:9,padding:"8px 10px",borderRadius:7,border:"none",cursor:"pointer",marginBottom:1,background:active===k?C.redD:"transparent",transition:"all .12s" }}>
+            <Icon size={14} color={active===k?C.red:C.textMuted}/>
+            <span style={{ fontSize:12,fontWeight:active===k?600:400,color:active===k?C.red:C.textMuted }}>{label}</span>
+            {k==="history"&&histLen>0&&<span style={{ marginLeft:"auto",fontSize:10,background:"#1e1e1e",color:C.textSec,borderRadius:10,padding:"1px 6px" }}>{histLen}</span>}
           </button>
         ))}
       </nav>
 
-      <div className="p-3 border-t border-gray-800/80 space-y-1.5">
-        <div className={`flex items-center gap-2 text-[11px] ${hasKey ? "text-green-400" : "text-gray-600"}`}>
-          <div className={`w-1.5 h-1.5 rounded-full ${hasKey ? "bg-green-400" : "bg-gray-600"}`} />
-          OpenAI {hasKey ? "Connected" : "Not Set"}
+      {/* Footer */}
+      <div style={{ padding:"10px 12px",borderTop:`1px solid ${C.borderSub}` }}>
+        <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:6 }}>
+          <div style={{ width:5,height:5,borderRadius:"50%",background:hasKey?C.green:C.textMuted }}/>
+          <span style={{ fontSize:11,color:hasKey?C.green:C.textMuted }}>OpenAI {hasKey?"Connected":"Not Set"}</span>
         </div>
-        <div className={`flex items-center gap-2 text-[11px] ${hasBrand ? "text-amber-400" : "text-gray-600"}`}>
-          <div className={`w-1.5 h-1.5 rounded-full ${hasBrand ? "bg-amber-400" : "bg-gray-600"}`} />
-          Brand {hasBrand ? "Ready" : "Not Set"}
-        </div>
+        <button onClick={onLogout} style={{ display:"flex",alignItems:"center",gap:7,background:"none",border:"none",cursor:"pointer" }}>
+          <LogOut size={12} color={C.textMuted}/><span style={{ fontSize:11,color:C.textMuted }}>Sign Out</span>
+        </button>
       </div>
     </aside>
   );
 }
 
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 // DASHBOARD
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 
-function Dashboard({ history, brand, assets, setTab }) {
-  const thisMonth = history.filter((h) =>
-    new Date(h.createdAt).getMonth() === new Date().getMonth()
-  ).length;
-
+function Dashboard({ history, brands, activeBrand, assets, setTab }) {
+  const thisMonth = history.filter(h => new Date(h.createdAt).getMonth()===new Date().getMonth()).length;
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-100">Welcome to SparkOs</h1>
-        <p className="text-sm text-gray-500 mt-1">AI-powered brand poster generation for real estate marketing</p>
+    <div style={{ padding:28,maxWidth:960,margin:"0 auto" }}>
+      <div style={{ marginBottom:24 }}>
+        <h1 style={{ fontSize:21,fontWeight:700,color:C.text,margin:0 }}>Dashboard</h1>
+        <p style={{ fontSize:13,color:C.textSec,marginTop:4 }}>
+          {activeBrand ? `Active brand: ${activeBrand.companyName}` : "Select or create a brand to get started"}
+        </p>
+      </div>
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24 }}>
+        <Stat label="Total Generated" value={history.length} icon={ImageIcon} color="red"/>
+        <Stat label="This Month"      value={thisMonth}      icon={TrendingUp} color="green"/>
+        <Stat label="Brands"          value={brands.length}  icon={Users}      color="blue"/>
+        <Stat label="Assets Cached"   value={(assets.images||[]).length+(assets.posters||[]).length} icon={FolderOpen} color="purple"/>
       </div>
 
-      <div className="grid grid-cols-4 gap-3 mb-6">
-        <Stat label="Total Generated" value={history.length}      icon={ImageIcon}   color="amber"  />
-        <Stat label="This Month"      value={thisMonth}           icon={TrendingUp}  color="green"  />
-        <Stat label="Brand Assets"    value={[assets.logo, ...assets.images, ...assets.posters].filter(Boolean).length} icon={FolderOpen} color="blue" />
-        <Stat label="Campaigns"       value={[...new Set(history.map((h) => h.campaignType))].length} icon={Layers} color="purple" />
-      </div>
-
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="col-span-2">
-          <Card className="p-5 h-full">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-gray-300">Quick Generate</h3>
-              <Badge color="amber">Studio</Badge>
-            </div>
-            <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-              Jump straight into generating. Configure your brand first for best results.
-              GPT-4o auto-enhances your prompt with brand context.
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {["New Year Post", "Property Launch", "Festival Greeting", "Offer Promotion"].map((t) => (
-                <button key={t} onClick={() => setTab("studio")}
-                  className="text-left px-3 py-2 bg-gray-800/60 hover:bg-gray-800 border border-gray-700/40 rounded-lg text-xs text-gray-400 hover:text-gray-200 transition-all">
-                  <span className="text-amber-500 mr-1.5">✦</span>{t}
-                </button>
-              ))}
-            </div>
-            <Btn onClick={() => setTab("studio")} variant="primary" size="sm" className="mt-4">
-              <Sparkles size={13} /> Open Prompt Studio
-            </Btn>
-          </Card>
-        </div>
-
-        <Card className="p-5">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3">Setup Checklist</h3>
-          <div className="space-y-2.5">
-            {[
-              { done: !!brand.companyName,       label: "Company name set",     tab: "brand"   },
-              { done: !!assets.logo,             label: "Logo uploaded",        tab: "assets"  },
-              { done: !!brand.primaryColor,      label: "Brand colors set",     tab: "brand"   },
-              { done: assets.images.length > 0, label: "Project images added", tab: "assets"  },
-              { done: history.length > 0,        label: "First poster generated",tab: "studio" },
-            ].map(({ done, label, tab }) => (
-              <button key={label} onClick={() => !done && setTab(tab)}
-                className={`w-full flex items-center gap-2.5 text-xs ${done ? "text-gray-500" : "text-gray-400 hover:text-gray-200"} transition-colors`}>
-                <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${done ? "bg-green-500/20 border-green-600" : "border-gray-600"}`}>
-                  {done && <CheckCheck size={9} className="text-green-400" />}
-                </div>
-                <span className={done ? "line-through" : ""}>{label}</span>
+      <div style={{ display:"grid",gridTemplateColumns:"2fr 1fr",gap:16,marginBottom:20 }}>
+        <CP>
+          <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
+            <span style={{ fontSize:13,fontWeight:600,color:C.text }}>Quick Start</span>
+            <Badge>Studio</Badge>
+          </div>
+          <p style={{ fontSize:12,color:C.textSec,marginBottom:14,lineHeight:1.7 }}>
+            Enter a simple prompt. GPT-4o enhances it with brand context, then generates a stunning poster using {`gpt-image-1`}.
+          </p>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16 }}>
+            {["New Year Post","Property Launch","Festival Greeting","Offer Promotion"].map(t => (
+              <button key={t} onClick={() => setTab("studio")}
+                style={{ textAlign:"left",padding:"8px 12px",background:C.input,border:`1px solid ${C.border}`,borderRadius:7,fontSize:12,color:C.textSec,cursor:"pointer" }}
+                onMouseEnter={e=>{e.target.style.borderColor=C.red;e.target.style.color=C.text;}}
+                onMouseLeave={e=>{e.target.style.borderColor=C.border;e.target.style.color=C.textSec;}}>
+                <span style={{ color:C.red,marginRight:6 }}>›</span>{t}
               </button>
             ))}
           </div>
-        </Card>
+          <Btn onClick={() => setTab("studio")} size="sm"><Sparkles size={13}/>Open Prompt Studio</Btn>
+        </CP>
+
+        <CP>
+          <span style={{ fontSize:13,fontWeight:600,color:C.text,display:"block",marginBottom:14 }}>Setup Checklist</span>
+          {[
+            { done:brands.length>0,              label:"Brand created",       tab:"brands"  },
+            { done:!!assets.logo,                label:"Logo uploaded",       tab:"assets"  },
+            { done:!!activeBrand?.primaryColor,  label:"Colors configured",   tab:"brandedit" },
+            { done:(assets.images||[]).length>0, label:"Reference images added",tab:"assets" },
+            { done:history.length>0,             label:"First poster generated",tab:"studio" },
+          ].map(({ done, label, tab }) => (
+            <button key={label} onClick={() => !done && setTab(tab)}
+              style={{ display:"flex",alignItems:"center",gap:8,background:"none",border:"none",cursor:done?"default":"pointer",padding:"5px 0",width:"100%" }}>
+              <div style={{ width:16,height:16,borderRadius:"50%",border:`1.5px solid ${done?C.green:C.border}`,background:done?C.greenD:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                {done && <CheckCheck size={9} color={C.green}/>}
+              </div>
+              <span style={{ fontSize:12,color:done?C.textMuted:C.textSec,textDecoration:done?"line-through":"none" }}>{label}</span>
+            </button>
+          ))}
+        </CP>
       </div>
 
-      {history.length > 0 && (
-        <Card className="p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-300">Recent Generations</h3>
+      {history.length>0 && (
+        <CP>
+          <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
+            <span style={{ fontSize:13,fontWeight:600,color:C.text }}>Recent Generations</span>
             <Btn variant="ghost" size="sm" onClick={() => setTab("history")}>View All</Btn>
           </div>
-          <div className="grid grid-cols-4 gap-3">
-            {history.slice(0, 4).map((item) => (
-              <div key={item.id} className="group relative rounded-lg overflow-hidden bg-gray-800 aspect-square cursor-pointer"
-                onClick={() => setTab("preview")}>
-                <img src={item.imageDataUrl} alt="" className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
-                  <div>
-                    <Badge color="amber">{item.campaignType.replace(/_/g, " ")}</Badge>
-                    <p className="text-[10px] text-gray-300 mt-1 line-clamp-2">{item.prompt}</p>
-                  </div>
-                </div>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10 }}>
+            {history.slice(0,4).map(item => (
+              <div key={item.id} onClick={() => setTab("preview")}
+                style={{ position:"relative",aspectRatio:"1",borderRadius:8,overflow:"hidden",background:"#1a1a1a",cursor:"pointer" }}>
+                <img src={item.imageDataUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
               </div>
             ))}
           </div>
-        </Card>
+        </CP>
       )}
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// BRAND SETUP
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
+// BRAND MANAGER
+// ─────────────────────────────────────────────────────────────
 
-function BrandSetup({ brand, setBrand, onSave }) {
-  const [tab, setTab] = useState("info");
-  const upd = (k) => (v) => setBrand((b) => ({ ...b, [k]: v }));
+function BrandsManager({ brands, activeBrand, setActiveBrand, setBrands, setTab, showToast }) {
+  const [creating,setCreating]=useState(false);
+  const [name,setName]=useState("");
+  const [loading,setLoading]=useState(false);
+
+  const create = async () => {
+    if (!name.trim()) return;
+    setLoading(true);
+    try {
+      const res = await api("/api/brands", { method:"POST", body: JSON.stringify({
+        companyName:name, brandType:"Premium Real Estate",
+        primaryColor:"#e53935", secondaryColor:"#1a1a1a",
+        textColor:"#ffffff", bgColor:"#080808",
+        tone:"premium, professional, aspirational",
+        designStyle:"luxury-minimal", typography:"elegant serif",
+        logoPlacement:"top-right",
+        showPhone:true, showWebsite:true, showLogo:true, showTagline:true,
+      })});
+      const updated = [...brands, res.brand];
+      setBrands(updated); setActiveBrand(res.brand);
+      localStorage.setItem("ab", res.brand.id);
+      setCreating(false); setName("");
+      showToast(`Brand "${name}" created!`, "success");
+    } catch(e) { showToast(e.message, "error"); }
+    setLoading(false);
+  };
+
+  const del = async b => {
+    if (!confirm(`Delete "${b.companyName}"?`)) return;
+    try {
+      await api(`/api/brands/${b.id}`, { method:"DELETE" });
+      const upd = brands.filter(x => x.id!==b.id);
+      setBrands(upd);
+      if (activeBrand?.id===b.id) { setActiveBrand(upd[0]||null); if(upd[0]) localStorage.setItem("ab",upd[0].id); else localStorage.removeItem("ab"); }
+      showToast("Brand deleted","success");
+    } catch(e) { showToast(e.message,"error"); }
+  };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <div className="mb-5 flex items-center justify-between">
+    <div style={{ padding:28,maxWidth:760,margin:"0 auto" }}>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:24 }}>
         <div>
-          <h2 className="text-xl font-bold text-gray-100">Brand Setup</h2>
-          <p className="text-xs text-gray-500 mt-0.5">Your brand info is injected into every AI prompt automatically</p>
+          <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>Brand Manager</h2>
+          <p style={{ fontSize:12,color:C.textSec,marginTop:4 }}>Each brand has independent assets, settings and history</p>
         </div>
-        <Btn onClick={onSave} variant="primary"><CheckCircle2 size={14} /> Save Brand</Btn>
+        <Btn onClick={() => setCreating(true)} size="sm"><Plus size={13}/>New Brand</Btn>
       </div>
 
-      <div className="flex gap-1 mb-5 bg-gray-900 border border-gray-800 rounded-lg p-1">
-        {[["info", "Company Info"], ["identity", "Brand Identity"], ["rules", "Branding Rules"]].map(([k, l]) => (
-          <button key={k} onClick={() => setTab(k)}
-            className={`flex-1 text-xs py-1.5 rounded-md transition-all ${tab === k ? "bg-amber-500 text-gray-950 font-semibold" : "text-gray-500 hover:text-gray-300"}`}>
-            {l}
-          </button>
+      {creating && (
+        <CP style={{ marginBottom:16,border:`1px solid ${C.redB}`,background:C.redD }}>
+          <p style={{ fontSize:13,fontWeight:600,color:C.text,marginBottom:12 }}>Create Brand</p>
+          <Lbl>Company Name</Lbl>
+          <Inp value={name} onChange={setName} placeholder="e.g. Prestige Group"/>
+          <div style={{ display:"flex",gap:8,marginTop:14 }}>
+            <Btn onClick={create} loading={loading}><Plus size={13}/>Create</Btn>
+            <Btn variant="secondary" onClick={() => { setCreating(false); setName(""); }}>Cancel</Btn>
+          </div>
+        </CP>
+      )}
+
+      {brands.length===0 && !creating && (
+        <CP style={{ textAlign:"center",padding:48 }}>
+          <Users size={36} color={C.textMuted} style={{ marginBottom:12 }}/>
+          <p style={{ fontSize:14,color:C.textSec,marginBottom:16 }}>No brands yet — create your first one</p>
+          <Btn onClick={() => setCreating(true)} size="sm"><Plus size={13}/>Create Brand</Btn>
+        </CP>
+      )}
+
+      <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+        {brands.map(b => (
+          <Card key={b.id} style={{ padding:"14px 18px",display:"flex",alignItems:"center",gap:14 }}>
+            <div style={{ width:38,height:38,borderRadius:9,background:b.primaryColor||C.red,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+              <Building2 size={16} color="#fff"/>
+            </div>
+            <div style={{ flex:1,minWidth:0 }}>
+              <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:3 }}>
+                <span style={{ fontSize:14,fontWeight:600,color:C.text }}>{b.companyName}</span>
+                {activeBrand?.id===b.id && <Badge>Active</Badge>}
+              </div>
+              <span style={{ fontSize:11,color:C.textMuted }}>{b.brandType||"Brand"} · {b.website||"No website"}</span>
+            </div>
+            <div style={{ display:"flex",gap:8 }}>
+              {activeBrand?.id!==b.id && (
+                <Btn variant="secondary" size="sm" onClick={() => { setActiveBrand(b); localStorage.setItem("ab",b.id); showToast(`Switched to ${b.companyName}`,"success"); }}>Select</Btn>
+              )}
+              <Btn variant="secondary" size="sm" onClick={() => { setActiveBrand(b); localStorage.setItem("ab",b.id); setTab("brandedit"); }}><Pencil size={12}/>Edit</Btn>
+              <Btn variant="danger" size="sm" onClick={() => del(b)}><Trash2 size={12}/></Btn>
+            </div>
+          </Card>
         ))}
       </div>
+    </div>
+  );
+}
 
-      {tab === "info" && (
-        <Card className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div><Lbl>Company Name *</Lbl><Inp value={brand.companyName} onChange={upd("companyName")} placeholder="e.g. Prestige Group" /></div>
-            <div><Lbl>Brand Type</Lbl><Sel value={brand.brandType} onChange={upd("brandType")} options={BRAND_TYPES.map((b) => ({ value: b, label: b }))} /></div>
+// ─────────────────────────────────────────────────────────────
+// BRAND EDIT
+// ─────────────────────────────────────────────────────────────
+
+function BrandEdit({ brand, brands, setBrands, setActiveBrand, showToast }) {
+  const [f,  setF]    = useState({ ...brand });
+  const [tab,setTab]  = useState("info");
+  const [sav,setSav]  = useState(false);
+
+  const u = k => v => setF(prev => ({ ...prev, [k]: v }));
+
+  const save = async () => {
+    setSav(true);
+    try {
+      const res = await api(`/api/brands/${brand.id}`, { method:"PUT", body: JSON.stringify(f) });
+      setBrands(prev => prev.map(b => b.id===brand.id ? res.brand : b));
+      setActiveBrand(res.brand);
+      showToast("Brand saved!","success");
+    } catch(e) { showToast(e.message,"error"); }
+    setSav(false);
+  };
+
+  const TB = ({ k, l }) => (
+    <button onClick={() => setTab(k)} style={{ flex:1,padding:"8px",background:tab===k?C.red:"transparent",color:tab===k?"#fff":C.textSec,border:"none",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer" }}>{l}</button>
+  );
+
+  const CRow = ({ k, label }) => (
+    <label style={{ display:"flex",alignItems:"center",gap:8,fontSize:12,color:C.textSec,cursor:"pointer" }}>
+      <input type="checkbox" checked={f[k]!==false} onChange={e => u(k)(e.target.checked)} style={{ accentColor:C.red }}/>
+      {label}
+    </label>
+  );
+
+  const ColorRow = ({ k, label, def }) => (
+    <div>
+      <Lbl>{label}</Lbl>
+      <div style={{ display:"flex",gap:8 }}>
+        <input type="color" value={f[k]||def} onChange={e => u(k)(e.target.value)}
+          style={{ width:36,height:36,border:"none",background:"none",cursor:"pointer",borderRadius:6,padding:2 }}/>
+        <Inp value={f[k]||def} onChange={u(k)} placeholder={def}/>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ padding:28,maxWidth:660,margin:"0 auto" }}>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20 }}>
+        <div>
+          <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>Edit Brand</h2>
+          <p style={{ fontSize:12,color:C.red,marginTop:4 }}>{f.companyName}</p>
+        </div>
+        <Btn onClick={save} loading={sav}><CheckCircle2 size={14}/>Save Changes</Btn>
+      </div>
+
+      <div style={{ display:"flex",gap:4,background:C.card,border:`1px solid ${C.border}`,borderRadius:9,padding:4,marginBottom:16 }}>
+        <TB k="info" l="Company Info"/><TB k="identity" l="Brand Identity"/><TB k="rules" l="Rules & AI"/>
+      </div>
+
+      {tab==="info" && (
+        <CP style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+            <div><Lbl>Company Name *</Lbl><Inp value={f.companyName||""} onChange={u("companyName")} placeholder="Prestige Group"/></div>
+            <div><Lbl>Brand Type</Lbl><Sel value={f.brandType||"Premium Real Estate"} onChange={u("brandType")} options={BRAND_TYPES.map(b=>({value:b,label:b}))}/></div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><Lbl>Website</Lbl><Inp value={brand.website} onChange={upd("website")} placeholder="www.yourcompany.com" /></div>
-            <div><Lbl>Phone</Lbl><Inp value={brand.phone} onChange={upd("phone")} placeholder="+91 98765 43210" /></div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+            <div><Lbl>Website</Lbl><Inp value={f.website||""} onChange={u("website")} placeholder="www.yourcompany.com"/></div>
+            <div><Lbl>Phone</Lbl><Inp value={f.phone||""} onChange={u("phone")} placeholder="+91 98765 43210"/></div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><Lbl>Email</Lbl><Inp value={brand.email} onChange={upd("email")} placeholder="sales@company.com" /></div>
-            <div><Lbl>RERA Number</Lbl><Inp value={brand.rera} onChange={upd("rera")} placeholder="RERA-XXXX" /></div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+            <div><Lbl>Email</Lbl><Inp value={f.email||""} onChange={u("email")} placeholder="sales@co.com"/></div>
+            <div><Lbl>RERA</Lbl><Inp value={f.rera||""} onChange={u("rera")} placeholder="RERA-XXXX"/></div>
           </div>
-          <div><Lbl>Address</Lbl><Txta value={brand.address} onChange={upd("address")} placeholder="Office address" rows={2} /></div>
-          <div className="grid grid-cols-3 gap-4">
-            <div><Lbl>Instagram</Lbl><Inp value={brand.instagram} onChange={upd("instagram")} placeholder="@handle" /></div>
-            <div><Lbl>Facebook</Lbl><Inp value={brand.facebook} onChange={upd("facebook")} placeholder="page name" /></div>
-            <div><Lbl>YouTube</Lbl><Inp value={brand.youtube} onChange={upd("youtube")} placeholder="channel" /></div>
+          <div><Lbl>Address</Lbl><Txta value={f.address||""} onChange={u("address")} rows={2}/></div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12 }}>
+            <div><Lbl>Instagram</Lbl><Inp value={f.instagram||""} onChange={u("instagram")} placeholder="@handle"/></div>
+            <div><Lbl>Facebook</Lbl><Inp value={f.facebook||""} onChange={u("facebook")} placeholder="page"/></div>
+            <div><Lbl>YouTube</Lbl><Inp value={f.youtube||""} onChange={u("youtube")} placeholder="channel"/></div>
           </div>
-        </Card>
+        </CP>
       )}
 
-      {tab === "identity" && (
-        <Card className="p-5 space-y-4">
-          <div><Lbl>Tagline / Slogan</Lbl><Inp value={brand.tagline} onChange={upd("tagline")} placeholder="e.g. Building Dreams, Creating Legacies" /></div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><Lbl>Primary Color</Lbl><ColorPicker value={brand.primaryColor} onChange={upd("primaryColor")} label="Main accent" /></div>
-            <div><Lbl>Secondary Color</Lbl><ColorPicker value={brand.secondaryColor} onChange={upd("secondaryColor")} label="Supporting" /></div>
+      {tab==="identity" && (
+        <CP style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          <div><Lbl>Tagline</Lbl><Inp value={f.tagline||""} onChange={u("tagline")} placeholder="Building Dreams, Creating Legacies"/></div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+            <ColorRow k="primaryColor"   label="Primary Color"   def="#e53935"/>
+            <ColorRow k="secondaryColor" label="Secondary Color" def="#1a1a1a"/>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><Lbl>Text Color</Lbl><ColorPicker value={brand.textColor} onChange={upd("textColor")} label="Headlines" /></div>
-            <div><Lbl>Background Color</Lbl><ColorPicker value={brand.bgColor} onChange={upd("bgColor")} label="Backgrounds" /></div>
+          <div><Lbl>Brand Tone</Lbl><Inp value={f.tone||""} onChange={u("tone")} placeholder="premium, professional, aspirational"/></div>
+          <div><Lbl>Design Style</Lbl>
+            <Sel value={f.designStyle||"luxury-minimal"} onChange={u("designStyle")} options={[
+              {value:"luxury-minimal",label:"Luxury Minimal"},{value:"modern-bold",label:"Modern Bold"},
+              {value:"classic-elegant",label:"Classic Elegant"},{value:"vibrant-dynamic",label:"Vibrant Dynamic"},
+              {value:"clean-corporate",label:"Clean Corporate"},
+            ]}/>
           </div>
-          <div>
-            <Lbl>Brand Tone & Voice</Lbl>
-            <Inp value={brand.tone} onChange={upd("tone")} placeholder="e.g. premium, professional, aspirational, trustworthy" />
-            <p className="text-[11px] text-gray-600 mt-1">Comma-separated — injected into every AI generation prompt</p>
-          </div>
-          <div>
-            <Lbl>Design Style</Lbl>
-            <Sel value={brand.designStyle} onChange={upd("designStyle")} options={[
-              { value: "luxury-minimal",  label: "Luxury Minimal"   },
-              { value: "modern-bold",     label: "Modern Bold"      },
-              { value: "classic-elegant", label: "Classic Elegant"  },
-              { value: "vibrant-dynamic", label: "Vibrant Dynamic"  },
-              { value: "clean-corporate", label: "Clean Corporate"  },
-            ]} />
-          </div>
-          <div><Lbl>Typography Preference</Lbl><Inp value={brand.typography} onChange={upd("typography")} placeholder="e.g. elegant serif, modern sans-serif, mixed" /></div>
-        </Card>
+          <div><Lbl>Typography</Lbl><Inp value={f.typography||""} onChange={u("typography")} placeholder="elegant serif, modern sans-serif"/></div>
+        </CP>
       )}
 
-      {tab === "rules" && (
-        <Card className="p-5 space-y-4">
+      {tab==="rules" && (
+        <CP style={{ display:"flex",flexDirection:"column",gap:14 }}>
           <div>
-            <Lbl>Logo Placement</Lbl>
-            <div className="grid grid-cols-3 gap-2">
-              {["top-left","top-center","top-right","bottom-left","bottom-center","bottom-right"].map((p) => (
-                <button key={p} onClick={() => upd("logoPlacement")(p)}
-                  className={`py-2 text-xs rounded-lg border transition-all ${brand.logoPlacement === p ? "border-amber-500 bg-amber-500/10 text-amber-400" : "border-gray-700 text-gray-500 hover:border-gray-600"}`}>
-                  {p.replace("-", " ")}
+            <Lbl>Logo Placement (empty space in AI image)</Lbl>
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6 }}>
+              {["top-left","top-center","top-right","bottom-left","bottom-center","bottom-right"].map(p => (
+                <button key={p} onClick={() => u("logoPlacement")(p)}
+                  style={{ padding:"8px",background:f.logoPlacement===p?C.redD:"transparent",border:`1px solid ${f.logoPlacement===p?C.red:C.border}`,borderRadius:7,fontSize:11,color:f.logoPlacement===p?C.red:C.textMuted,cursor:"pointer" }}>
+                  {p.replace("-"," ")}
                 </button>
               ))}
             </div>
+            <p style={{ fontSize:11,color:C.textMuted,marginTop:6 }}>AI will leave a bright empty space here — you manually place logo after download</p>
           </div>
           <div>
-            <Lbl>Content to Always Include</Lbl>
-            <div className="grid grid-cols-2 gap-2">
-              {[["showPhone","Phone Number"],["showWebsite","Website URL"],["showLogo","Logo"],["showTagline","Tagline"],["showAddress","Address"],["showSocial","Social Handles"]].map(([k, l]) => (
-                <label key={k} className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
-                  <input type="checkbox" checked={brand[k] !== false} onChange={(e) => upd(k)(e.target.checked)} className="accent-amber-500" />
-                  {l}
-                </label>
-              ))}
+            <Lbl>Always Include in Overlay</Lbl>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
+              <CRow k="showPhone"   label="Phone Number"/>
+              <CRow k="showWebsite" label="Website URL"/>
+              <CRow k="showLogo"    label="Logo (overlay mode)"/>
+              <CRow k="showTagline" label="Tagline"/>
             </div>
           </div>
-          <div><Lbl>Design Restrictions / Do Nots</Lbl><Txta value={brand.restrictions} onChange={upd("restrictions")} placeholder="e.g. No dark backgrounds, avoid red color..." rows={3} /></div>
-          <div><Lbl>Special Instructions for AI</Lbl><Txta value={brand.aiInstructions} onChange={upd("aiInstructions")} placeholder="e.g. Always show luxury apartments, use warm lighting..." rows={3} /></div>
-          <div><Lbl>Disclaimer / Legal Text</Lbl><Inp value={brand.disclaimer} onChange={upd("disclaimer")} placeholder="e.g. *T&C Apply. RERA registered project." /></div>
-        </Card>
+          <div><Lbl>Design Restrictions</Lbl><Txta value={f.restrictions||""} onChange={u("restrictions")} placeholder="No dark backgrounds, avoid red..." rows={3}/></div>
+          <div><Lbl>Special AI Instructions</Lbl><Txta value={f.aiInstructions||""} onChange={u("aiInstructions")} placeholder="Always show luxury towers, warm golden lighting..." rows={3}/></div>
+          <div><Lbl>Legal Disclaimer</Lbl><Inp value={f.disclaimer||""} onChange={u("disclaimer")} placeholder="*T&C Apply. RERA registered."/></div>
+        </CP>
       )}
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// ASSET UPLOAD
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
+// ASSET UPLOAD  — with IndexedDB caching
+// ─────────────────────────────────────────────────────────────
 
-function AssetUpload({ assets, setAssets, showToast }) {
-  const handleLogo = async (files) => {
-    if (!files.length) return;
-    const dataUrl = await fileToDataUrl(files[0]);
-    setAssets((a) => ({ ...a, logo: { name: files[0].name, dataUrl } }));
-    showToast("Logo uploaded!", "success");
+function AssetUpload({ activeBrand, assets, setAssets, showToast }) {
+  if (!activeBrand) return (
+    <div style={{ padding:28,textAlign:"center",paddingTop:80 }}>
+      <FolderOpen size={36} color={C.textMuted} style={{ marginBottom:12 }}/>
+      <p style={{ color:C.textSec }}>Select a brand first to manage assets</p>
+    </div>
+  );
+
+  const uploadFile = async (file, type) => {
+    try {
+      const dataUrl  = await fileToDataUrl(file);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("brandId", activeBrand.id);
+      const res  = await fetch(`${BACKEND}/api/assets/upload?type=${type}`, { method:"POST", body:formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      // Cache in IndexedDB
+      const fileId = data.fileId || uid();
+      await cacheAsset(activeBrand.id, fileId, file.name, dataUrl);
+
+      setAssets(prev => {
+        if (type==="logo") return { ...prev, logo:{ name:file.name, dataUrl, url:data.url, fileId } };
+        return { ...prev, [type]:[...(prev[type]||[]), { id:fileId, name:file.name, dataUrl, url:data.url }] };
+      });
+      return true;
+    } catch(e) { showToast(e.message,"error"); return false; }
   };
-  const handleImages = async (files) => {
-    const arr = await Promise.all(files.map(async (f) => ({ id: uid(), name: f.name, dataUrl: await fileToDataUrl(f) })));
-    setAssets((a) => ({ ...a, images: [...a.images, ...arr] }));
-    showToast(`${files.length} image(s) added`, "success");
+
+  const uploadMany = async (files, type) => {
+    let ok = 0;
+    for (const f of files) { if (await uploadFile(f, type)) ok++; }
+    if (ok) showToast(`${ok} file(s) uploaded & cached`, "success");
   };
-  const handlePosters = async (files) => {
-    const arr = await Promise.all(files.map(async (f) => ({ id: uid(), name: f.name, dataUrl: await fileToDataUrl(f) })));
-    setAssets((a) => ({ ...a, posters: [...a.posters, ...arr] }));
-    showToast(`${files.length} reference poster(s) added`, "success");
-  };
-  const handleDocs = async (files) => {
-    setAssets((a) => ({ ...a, docs: [...a.docs, ...files.map((f) => ({ id: uid(), name: f.name, size: f.size }))] }));
-    showToast(`${files.length} document(s) added`, "success");
-  };
-  const removeItem = (type, id) => setAssets((a) => ({ ...a, [type]: a[type].filter((i) => i.id !== id) }));
+
+  const rm = (type, id) => setAssets(prev => ({ ...prev, [type]: prev[type].filter(i => i.id!==id) }));
+
+  const Box = ({ title, type, Icon, color, hint, accept, multi }) => (
+    <CP>
+      <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:10 }}>
+        <Icon size={14} color={color}/>
+        <span style={{ fontSize:13,fontWeight:600,color:C.text }}>{title}</span>
+        {type!=="logo" && <Badge color="gray">{(assets[type]||[]).length} files</Badge>}
+      </div>
+      {hint && <p style={{ fontSize:11,color:C.textMuted,marginBottom:10 }}>{hint}</p>}
+
+      {type==="logo" && assets.logo ? (
+        <div>
+          <div style={{ width:"100%",height:110,background:C.input,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8 }}>
+            <img src={assets.logo.dataUrl||assets.logo.url} alt="logo" style={{ maxWidth:"100%",maxHeight:"100%",objectFit:"contain",padding:10 }}/>
+          </div>
+          <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+            <span style={{ fontSize:11,color:C.textMuted }}>{assets.logo.name}</span>
+            <Btn variant="danger" size="sm" onClick={() => setAssets(p=>({...p,logo:null}))}><Trash2 size={11}/></Btn>
+          </div>
+        </div>
+      ) : (
+        <DropZone onFiles={f => type==="logo" ? uploadMany([f[0]],type) : uploadMany(f,type)} accept={accept} multiple={multi}>
+          <div style={{ padding:20,textAlign:"center" }}>
+            <Upload size={18} color={C.textMuted} style={{ marginBottom:7 }}/>
+            <p style={{ fontSize:12,color:C.textMuted }}>{multi?"Drop files or click":"Drop file or click"}</p>
+          </div>
+        </DropZone>
+      )}
+
+      {type!=="logo" && (assets[type]||[]).length>0 && (
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginTop:10 }}>
+          {(assets[type]||[]).map(item => (
+            <div key={item.id} style={{ position:"relative",aspectRatio:"1",borderRadius:7,overflow:"hidden",background:"#1a1a1a" }}>
+              {item.dataUrl ? <img src={item.dataUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/> :
+                <div style={{ display:"flex",alignItems:"center",justifyContent:"center",height:"100%" }}><FileText size={16} color={C.textMuted}/></div>}
+              <button onClick={() => rm(type,item.id)}
+                style={{ position:"absolute",top:4,right:4,width:20,height:20,borderRadius:"50%",background:"rgba(0,0,0,.7)",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
+                <X size={10} color="#fff"/>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {type!=="logo" && (
+        <div style={{ marginTop:8 }}>
+          <DropZone onFiles={f => uploadMany(f,type)} accept={accept} multiple={multi}>
+            <div style={{ padding:"9px",textAlign:"center" }}>
+              <span style={{ fontSize:11,color:C.textMuted }}>+ Add more</span>
+            </div>
+          </DropZone>
+        </div>
+      )}
+    </CP>
+  );
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="mb-5">
-        <h2 className="text-xl font-bold text-gray-100">Asset Library</h2>
-        <p className="text-xs text-gray-500 mt-0.5">Upload brand assets used in AI generation and brand overlay mode</p>
+    <div style={{ padding:28,maxWidth:880,margin:"0 auto" }}>
+      <div style={{ marginBottom:20 }}>
+        <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>Asset Library</h2>
+        <p style={{ fontSize:12,color:C.textSec,marginTop:4 }}>Brand: <span style={{ color:C.red }}>{activeBrand.companyName}</span> · Files cached in browser IndexedDB — persist across sessions</p>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <ImageIcon size={14} className="text-amber-400" />
-            <h3 className="text-sm font-semibold text-gray-200">Company Logo</h3>
-            <span className="text-[10px] text-red-400">Required</span>
-          </div>
-          {assets.logo ? (
-            <div>
-              <div className="w-full h-32 bg-gray-800 rounded-lg flex items-center justify-center">
-                <img src={assets.logo.dataUrl} alt="logo" className="max-w-full max-h-full object-contain p-3" />
-              </div>
-              <div className="flex items-center justify-between mt-2">
-                <span className="text-xs text-gray-500 truncate">{assets.logo.name}</span>
-                <Btn variant="ghost" size="sm" onClick={() => setAssets((a) => ({ ...a, logo: null }))}><Trash2 size={12} /></Btn>
-              </div>
-            </div>
-          ) : (
-            <DropZone onFiles={handleLogo} accept="image/*">
-              <div className="p-6 text-center">
-                <Upload size={24} className="text-gray-600 mx-auto mb-2" />
-                <p className="text-xs text-gray-500">Drop logo here or click</p>
-                <p className="text-[11px] text-gray-600 mt-1">PNG, SVG recommended</p>
-              </div>
-            </DropZone>
-          )}
-        </Card>
 
-        <Card className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <FolderOpen size={14} className="text-blue-400" />
-            <h3 className="text-sm font-semibold text-gray-200">Project Images</h3>
-            <Badge color="blue">{assets.images.length}</Badge>
-          </div>
-          <DropZone onFiles={handleImages} accept="image/*" multiple>
-            <div className="p-4 text-center"><Upload size={20} className="text-gray-600 mx-auto mb-1" /><p className="text-xs text-gray-500">Drop multiple images</p></div>
-          </DropZone>
-          {assets.images.length > 0 && (
-            <div className="grid grid-cols-3 gap-1.5 mt-3">
-              {assets.images.map((img) => (
-                <div key={img.id} className="group relative aspect-square rounded-md overflow-hidden bg-gray-800">
-                  <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
-                  <button onClick={() => removeItem("images", img.id)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><Trash2 size={14} className="text-red-400" /></button>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
+      {/* Cache info */}
+      <div style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:C.greenD,border:`1px solid ${C.greenB}`,borderRadius:8,marginBottom:16,fontSize:12,color:C.green }}>
+        <Info size={13}/>
+        <span>All uploaded images are cached in your browser (IndexedDB). They load instantly next time without re-uploading. Reference images are automatically included in every AI generation request.</span>
+      </div>
 
-        <Card className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Star size={14} className="text-purple-400" />
-            <h3 className="text-sm font-semibold text-gray-200">Reference Posters</h3>
-            <Badge color="purple">{assets.posters.length}</Badge>
-          </div>
-          <p className="text-[11px] text-gray-600 mb-3">Upload sample posters for AI style reference</p>
-          <DropZone onFiles={handlePosters} accept="image/*" multiple>
-            <div className="p-4 text-center"><Upload size={20} className="text-gray-600 mx-auto mb-1" /><p className="text-xs text-gray-500">Drop sample designs</p></div>
-          </DropZone>
-          {assets.posters.length > 0 && (
-            <div className="grid grid-cols-3 gap-1.5 mt-3">
-              {assets.posters.map((p) => (
-                <div key={p.id} className="group relative aspect-square rounded-md overflow-hidden bg-gray-800">
-                  <img src={p.dataUrl} alt="" className="w-full h-full object-cover" />
-                  <button onClick={() => removeItem("posters", p.id)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><Trash2 size={14} className="text-red-400" /></button>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        <Card className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <FileText size={14} className="text-green-400" />
-            <h3 className="text-sm font-semibold text-gray-200">Documents</h3>
-            <Badge color="green">{assets.docs.length}</Badge>
-          </div>
-          <p className="text-[11px] text-gray-600 mb-3">Brochures, pricing sheets, project details</p>
-          <DropZone onFiles={handleDocs} accept=".pdf,.docx,.txt,.doc" multiple>
-            <div className="p-4 text-center"><Upload size={20} className="text-gray-600 mx-auto mb-1" /><p className="text-xs text-gray-500">PDF, DOCX, TXT</p></div>
-          </DropZone>
-          {assets.docs.length > 0 && (
-            <div className="mt-3 space-y-1.5">
-              {assets.docs.map((d) => (
-                <div key={d.id} className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-800/60 rounded-lg">
-                  <FileText size={12} className="text-gray-500 shrink-0" />
-                  <span className="text-xs text-gray-400 flex-1 truncate">{d.name}</span>
-                  <span className="text-[11px] text-gray-600">{(d.size / 1024).toFixed(0)}KB</span>
-                  <button onClick={() => removeItem("docs", d.id)} className="text-gray-600 hover:text-red-400"><X size={12} /></button>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14 }}>
+        <Box title="Company Logo" type="logo" Icon={ImageIcon} color={C.red} hint="Used in brand overlay mode" accept="image/*"/>
+        <Box title="Project Images" type="images" Icon={FolderOpen} color={C.blue} hint="Property photos, renders — sent to AI as style reference" accept="image/*" multi/>
+        <Box title="Reference Posters" type="posters" Icon={Star} color="#ab47bc" hint="Sample designs — AI learns typography and layout from these" accept="image/*" multi/>
+        <Box title="Documents" type="docs" Icon={FileText} color={C.green} hint="Brochures, pricing sheets" accept=".pdf,.docx,.txt" multi/>
       </div>
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 // PROMPT STUDIO
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 
-function PromptStudio({ brand, assets, openAIKey, imageModel, enhanceModel, history, setHistory, setPreview, setTab, showToast }) {
-  const [prompt,          setPrompt]          = useState("");
-  const [campaign,        setCampaign]        = useState("auto");
-  const [ratio,           setRatio]           = useState("1:1");
-  const [mode,            setMode]            = useState("ai");
-  const [enhanced,        setEnhanced]        = useState("");
-  const [detectedCampaign,setDetectedCampaign]= useState("");
-  const [showEnhanced,    setShowEnhanced]    = useState(false);
-  const [isGenerating,    setIsGenerating]    = useState(false);
-  const [logs,            setLogs]            = useState([]);
+function PromptStudio({ activeBrand, assets, openAIKey, imageModel, enhanceModel, history, setHistory, setPreview, setTab, showToast }) {
+  const [prompt,     setPrompt]     = useState("");
+  const [campaign,   setCampaign]   = useState("auto");
+  const [ratio,      setRatio]      = useState("1:1");
+  const [mode,       setMode]       = useState("ai");
+  const [logoPos,    setLogoPos]    = useState("top-right");
+  const [enhanced,   setEnhanced]   = useState("");
+  const [showEnh,    setShowEnh]    = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [logs,       setLogs]       = useState([]);
 
-  const addLog = (msg, type = "info") =>
-    setLogs((l) => [...l, { msg, type, time: new Date().toLocaleTimeString() }]);
+  useEffect(() => { if (activeBrand?.logoPlacement) setLogoPos(activeBrand.logoPlacement); }, [activeBrand]);
 
-  const buildSystemPrompt = () => {
-    const b = brand;
-    return `You are a world-class marketing expert and AI image prompt engineer for ${b.brandType || "real estate"} marketing.
+  if (!activeBrand) return (
+    <div style={{ padding:28,textAlign:"center",paddingTop:80 }}>
+      <Sparkles size={36} color={C.textMuted} style={{ marginBottom:12 }}/>
+      <p style={{ color:C.textSec }}>Select a brand first</p>
+    </div>
+  );
 
-Brand: ${b.companyName || "Brand"}
-Type: ${b.brandType || "Premium Real Estate"}
-Colors: Primary ${b.primaryColor || "#C9A96E"}, Secondary ${b.secondaryColor || "#1A1A2E"}
-Tone: ${b.tone || "premium, professional, aspirational"}
-Style: ${b.designStyle || "luxury minimal"}
-Tagline: ${b.tagline || ""}
-AI Instructions: ${b.aiInstructions || "none"}
-Restrictions: ${b.restrictions || "none"}
+  const addLog = (msg, type="info") => setLogs(l => [...l, { msg, type, time: new Date().toLocaleTimeString() }]);
 
-Transform the user's simple prompt into a rich, detailed image generation prompt for a STUNNING professional marketing poster.
+  const buildSysPrompt = (refCount) => {
+    const b = activeBrand;
+    const refNote = refCount > 0
+      ? `\n\nYou have access to ${refCount} reference poster image(s) from this brand. Study them carefully for: layout style, typography aesthetic, color usage, visual mood, and composition. Replicate this design language.`
+      : "";
 
-RULES:
-- High-end, premium visual quality
-- Describe lighting, depth, atmosphere, color palette
-- Leave natural space in composition for text overlay
-- Do NOT include readable text in the image itself
-- Match the brand's visual style and tone
+    return `You are a world-class marketing creative director and AI image prompt engineer for ${b.brandType||"real estate"}.
 
-Respond ONLY with valid JSON — no markdown, no extra text:
-{
-  "campaignType": "one of: festival|new_year|property_launch|offer|site_visit|possession|milestone|brand_awareness|testimonial|project_highlight|construction_update",
-  "enhancedPrompt": "detailed image generation prompt here",
-  "aspectRatio": "1:1 or 4:5 or 9:16 or 16:9",
-  "reasoning": "brief explanation"
-}`;
+Brand: ${b.companyName||"Brand"}
+Type: ${b.brandType||"Premium Real Estate"}
+Colors: ${b.primaryColor||"#e53935"} / ${b.secondaryColor||"#1a1a1a"}
+Style: ${b.designStyle||"luxury minimal"}
+Tone: ${b.tone||"premium, aspirational"}
+Tagline: ${b.tagline||""}
+AI Instructions: ${b.aiInstructions||"none"}
+Restrictions: ${b.restrictions||"none"}${refNote}
+
+Generate a MASTERFUL image generation prompt.
+
+MANDATORY REQUIREMENTS — EVERY IMAGE MUST HAVE:
+1. BEAUTIFUL CREATIVE TEXT integrated into the design (campaign headline, dates, taglines etc.)
+   Example: "Happy New Year 2025" in gold foil, "Grand Launch" in bold serif, "Eid Mubarak" in Arabic-inspired script
+   Text must look DESIGNED — artistic, large, perfectly placed, visually stunning
+2. A CLEAN BRIGHT EMPTY RECTANGULAR SPACE (approx 130x130px) at ${logoPos} corner of the image
+   This space MUST be: bright white, very light gray, or a soft glow — completely empty, no patterns, no text
+   Explicitly describe: "clean bright white empty space in the ${logoPos} for logo placement"
+3. ZERO logos, brand marks, watermarks, or emblems anywhere else in the image
+4. Premium cinematic composition: dramatic lighting, bokeh, depth, luxurious materials
+5. Colors complementing ${b.primaryColor||"#e53935"}
+
+Return ONLY JSON:
+{"campaignType":"festival|new_year|property_launch|offer|site_visit|possession|milestone|brand_awareness|testimonial|project_highlight|construction_update","enhancedPrompt":"...","aspectRatio":"1:1 or 4:5 or 9:16 or 16:9","reasoning":"brief"}`;
   };
 
-  const handleGenerate = async () => {
-    if (!prompt.trim()) { showToast("Please enter a prompt", "error"); return; }
-    if (!openAIKey && openAIKey !== "__env_configured__")     { showToast("OpenAI API key required — go to API Settings", "error"); return; }
-
-    setIsGenerating(true);
-    setLogs([]);
-    setShowEnhanced(false);
-
+  const generate = async () => {
+    if (!prompt.trim()) { showToast("Enter a prompt","error"); return; }
+    if (!openAIKey)     { showToast("Add OpenAI API key in Settings","error"); return; }
+    setGenerating(true); setLogs([]); setShowEnh(false);
     try {
-      // ── Step 1: Enhance prompt using GPT-4o (no Anthropic needed) ──
-      addLog(`Enhancing prompt with ${enhanceModel}...`, "info");
-      const raw = await enhanceWithOpenAI(
-        buildSystemPrompt(),
-        `User prompt: "${prompt}". Selected campaign: ${campaign}. Preferred ratio: ${ratio}.`,
-        openAIKey,
-        enhanceModel
-      );
+      // Collect cached reference images (posters + project images)
+      const refImgs = [];
+      for (const p of (assets.posters||[]).slice(0,2)) {
+        const cached = p.dataUrl || await getCachedAsset(activeBrand.id, p.id);
+        if (cached) refImgs.push(cached);
+      }
+      for (const img of (assets.images||[]).slice(0,2)) {
+        const cached = img.dataUrl || await getCachedAsset(activeBrand.id, img.id);
+        if (cached && refImgs.length < 3) refImgs.push(cached);
+      }
+
+      addLog(`Enhancing with ${enhanceModel} — ${refImgs.length} reference image(s) loaded from cache...`);
+
+      // Build message with vision if we have ref images
+      let gptResponse;
+      if (refImgs.length > 0 && (enhanceModel==="gpt-4o"||enhanceModel==="gpt-4-turbo")) {
+        // Use vision endpoint with cached images
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type":"application/json", Authorization:`Bearer ${openAIKey}` },
+          body: JSON.stringify({
+            model: enhanceModel, max_tokens:1000, temperature:0.75,
+            messages: [{
+              role: "system", content: buildSysPrompt(refImgs.length)
+            },{
+              role: "user",
+              content: [
+                { type:"text", text:`User prompt: "${prompt}". Campaign: ${campaign}. Preferred ratio: ${ratio}. Logo position: ${logoPos}.` },
+                ...refImgs.map(url => ({ type:"image_url", image_url:{ url, detail:"low" } }))
+              ]
+            }]
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message||"GPT error");
+        gptResponse = data.choices[0].message.content;
+      } else {
+        gptResponse = await enhanceWithGPT(buildSysPrompt(0),
+          `User prompt: "${prompt}". Campaign: ${campaign}. Preferred ratio: ${ratio}. Logo position: ${logoPos}.`,
+          openAIKey, enhanceModel);
+      }
 
       let parsed;
-      try {
-        parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
-      } catch {
-        parsed = { campaignType: campaign === "auto" ? "brand_awareness" : campaign, enhancedPrompt: prompt, aspectRatio: ratio, reasoning: "" };
-      }
+      try { parsed = JSON.parse(gptResponse.replace(/```json|```/g,"").trim()); }
+      catch { parsed = { campaignType: campaign==="auto"?"brand_awareness":campaign, enhancedPrompt:prompt, aspectRatio:ratio, reasoning:"" }; }
 
       const finalCampaign = parsed.campaignType || campaign;
       const finalPrompt   = parsed.enhancedPrompt || prompt;
       const finalRatio    = parsed.aspectRatio || ratio;
 
-      setEnhanced(finalPrompt);
-      setDetectedCampaign(finalCampaign);
-      setShowEnhanced(true);
+      setEnhanced(finalPrompt); setShowEnh(true);
       addLog(`✓ Campaign: ${finalCampaign}`, "success");
-      addLog(`✓ Ratio: ${finalRatio}`, "success");
+      addLog(`✓ Size: ${getImageSize(finalRatio, imageModel)} (${finalRatio})`, "success");
+      addLog(`Generating with ${imageModel}...`);
 
-      // ── Step 2: Generate image ──
-      addLog(`Generating with ${imageModel}...`, "info");
-      const ratioObj  = ASPECT_RATIOS.find((r) => r.value === finalRatio) || ASPECT_RATIOS[0];
-      const imgDataUrl = await generateImage(finalPrompt, ratioObj.size, openAIKey, imageModel);
+      const size   = getImageSize(finalRatio, imageModel);
+      const imgUrl = await generateImageFrontend(finalPrompt, size, openAIKey, imageModel);
       addLog("✓ Image generated!", "success");
 
-      let finalImg = imgDataUrl;
-
-      // ── Step 3: Optional brand overlay ──
-      if (mode === "overlay") {
-        addLog("Applying brand overlay...", "info");
-        finalImg = await applyBrandOverlay(imgDataUrl, brand, assets.logo?.dataUrl);
-        addLog("✓ Brand overlay applied!", "success");
+      let finalImg = imgUrl;
+      if (mode==="overlay" && assets.logo) {
+        addLog("Applying logo overlay...");
+        finalImg = await applyLogoOverlay(imgUrl, activeBrand, assets.logo.dataUrl||assets.logo.url, logoPos);
+        addLog("✓ Logo overlay applied!", "success");
       }
 
       const gen = {
-        id: uid(), prompt, enhancedPrompt: finalPrompt, campaignType: finalCampaign,
-        aspectRatio: finalRatio, mode, imageDataUrl: finalImg,
-        createdAt: new Date().toISOString(), reasoning: parsed.reasoning || "",
+        id: uid(), brandId: activeBrand.id, prompt, enhancedPrompt: finalPrompt,
+        campaignType: finalCampaign, aspectRatio: finalRatio, mode, imageDataUrl: finalImg,
+        createdAt: new Date().toISOString(), reasoning: parsed.reasoning||"", logoPos,
       };
-
-      setHistory((h) => [gen, ...h]);
+      setHistory(h => [gen,...h]);
       setPreview(gen);
-      addLog("Saved to history.", "success");
-      setTimeout(() => setTab("preview"), 600);
-    } catch (err) {
-      addLog(`Error: ${err.message}`, "error");
-      showToast(err.message, "error");
-    } finally {
-      setIsGenerating(false);
+      addLog("Saved to history", "success");
+      setTimeout(() => setTab("preview"), 500);
+    } catch(e) {
+      addLog(`Error: ${e.message}`, "error");
+      showToast(e.message, "error");
     }
+    setGenerating(false);
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="mb-5">
-        <h2 className="text-xl font-bold text-gray-100">Prompt Studio</h2>
-        <p className="text-xs text-gray-500 mt-0.5">GPT-4o enhances your simple prompt — {imageModel} generates the image</p>
+    <div style={{ padding:28,maxWidth:940,margin:"0 auto" }}>
+      <div style={{ marginBottom:20 }}>
+        <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>Prompt Studio</h2>
+        <p style={{ fontSize:12,color:C.textSec,marginTop:4 }}>
+          Brand: <span style={{ color:C.red }}>{activeBrand.companyName}</span>
+          {(assets.posters||[]).length>0 && <> · <span style={{ color:C.green }}>{(assets.posters||[]).length} reference poster(s) cached</span></>}
+        </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 space-y-4">
-          <Card className="p-4">
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 268px",gap:16 }}>
+        <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          <CP>
             <Lbl>Your Prompt</Lbl>
             <Txta value={prompt} onChange={setPrompt} rows={4}
-              placeholder={`e.g. "Create a New Year post" or "Property launch for Skyline Tower" or "Diwali festival offer"`} />
-            <p className="text-[11px] text-gray-600 mt-1.5">Keep it simple — AI handles the creative work</p>
-          </Card>
+              placeholder={`Simple is best — e.g.\n"Create a New Year post"\n"Property launch for Skyline Tower"\n"Diwali festival offer promotion"`}/>
+            <p style={{ fontSize:11,color:C.textMuted,marginTop:8 }}>AI enhances with brand context + reference image styles from your cache</p>
+          </CP>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Card className="p-4">
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+            <CP>
               <Lbl>Campaign Type</Lbl>
-              <Sel value={campaign} onChange={setCampaign} options={CAMPAIGN_TYPES} />
-              {campaign === "auto" && <p className="text-[11px] text-gray-600 mt-1.5">AI will auto-detect from your prompt</p>}
-            </Card>
-            <Card className="p-4">
+              <Sel value={campaign} onChange={setCampaign} options={CAMPAIGN_TYPES}/>
+              {campaign==="auto" && <p style={{ fontSize:11,color:C.textMuted,marginTop:6 }}>AI will detect from prompt</p>}
+            </CP>
+            <CP>
               <Lbl>Aspect Ratio</Lbl>
-              <div className="grid grid-cols-2 gap-1.5">
-                {ASPECT_RATIOS.map((r) => (
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:6 }}>
+                {ASPECT_RATIOS.map(r => (
                   <button key={r.value} onClick={() => setRatio(r.value)}
-                    className={`py-1.5 text-xs rounded-lg border transition-all ${ratio === r.value ? "border-amber-500 bg-amber-500/10 text-amber-400" : "border-gray-700 text-gray-500 hover:border-gray-600"}`}>
-                    <div className="font-semibold">{r.label}</div>
-                    <div className="text-[10px] opacity-70">{r.desc}</div>
+                    style={{ padding:"7px",background:ratio===r.value?C.redD:C.input,border:`1px solid ${ratio===r.value?C.red:C.border}`,borderRadius:7,cursor:"pointer",transition:"all .12s",textAlign:"center" }}>
+                    <div style={{ fontSize:12,fontWeight:700,color:ratio===r.value?C.red:C.text }}>{r.value}</div>
+                    <div style={{ fontSize:10,color:C.textMuted,marginTop:2 }}>{r.desc}</div>
+                    <div style={{ fontSize:9,color:C.textMuted }}>{getImageSize(r.value,imageModel)}</div>
                   </button>
                 ))}
               </div>
-            </Card>
+            </CP>
           </div>
 
-          <Card className="p-4">
+          <CP>
             <Lbl>Generation Mode</Lbl>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { v: "ai",      icon: Sparkles, label: "AI Full Control",  desc: "AI generates the full design including branding. Best creative results." },
-                { v: "overlay", icon: Layers,   label: "Brand Overlay",    desc: "AI generates base visual, then logo + contact + website overlaid programmatically." },
-              ].map(({ v, icon: Icon, label, desc }) => (
-                <button key={v} onClick={() => setMode(v)}
-                  className={`p-3 rounded-xl border text-left transition-all ${mode === v ? "border-amber-500 bg-amber-500/8" : "border-gray-700 hover:border-gray-600"}`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <Icon size={13} className={mode === v ? "text-amber-400" : "text-gray-500"} />
-                    <span className={`text-xs font-semibold ${mode === v ? "text-amber-400" : "text-gray-400"}`}>{label}</span>
-                  </div>
-                  <p className="text-[11px] text-gray-600 leading-relaxed">{desc}</p>
-                </button>
-              ))}
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
+              <RCard selected={mode==="ai"} onClick={() => setMode("ai")} label="AI Full Control" desc="AI generates complete image. Creative text + empty logo zone included in the composition."/>
+              <RCard selected={mode==="overlay"} onClick={() => setMode("overlay")} label="Logo Overlay" desc="AI generates base visual, then your logo is programmatically placed at selected position."/>
             </div>
-          </Card>
+          </CP>
 
-          {showEnhanced && enhanced && (
-            <Card className="p-4 border-amber-800/30 bg-amber-950/10">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Sparkles size={13} className="text-amber-400" />
-                  <span className="text-xs font-semibold text-amber-400">GPT-Enhanced Prompt</span>
-                  {detectedCampaign && <Badge color="amber">{detectedCampaign.replace(/_/g, " ")}</Badge>}
-                </div>
-                <button onClick={() => setShowEnhanced(false)} className="text-gray-600 hover:text-gray-400"><X size={13} /></button>
+          {mode==="overlay" && (
+            <CP>
+              <Lbl>Logo Position (applies to overlay)</Lbl>
+              <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6 }}>
+                {["top-left","top-center","top-right","bottom-left","bottom-center","bottom-right"].map(p => (
+                  <button key={p} onClick={() => setLogoPos(p)}
+                    style={{ padding:"8px",background:logoPos===p?C.redD:C.input,border:`1px solid ${logoPos===p?C.red:C.border}`,borderRadius:7,fontSize:11,color:logoPos===p?C.red:C.textMuted,cursor:"pointer" }}>
+                    {p.replace("-"," ")}
+                  </button>
+                ))}
               </div>
-              <p className="text-xs text-gray-400 leading-relaxed">{enhanced}</p>
-            </Card>
+              <p style={{ fontSize:11,color:C.textMuted,marginTop:7 }}>AI will also leave a bright empty zone here (matching your selection) in the generated image</p>
+            </CP>
           )}
 
-          <Btn onClick={handleGenerate} loading={isGenerating} disabled={!prompt.trim() || (!openAIKey && openAIKey !== "__env_configured__")} variant="primary" size="lg" full>
-            {isGenerating ? "Generating..." : <><Play size={15} /> Generate Poster</>}
+          {showEnh && enhanced && (
+            <CP style={{ border:`1px solid ${C.redB}`,background:C.redD }}>
+              <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8 }}>
+                <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                  <Sparkles size={13} color={C.red}/>
+                  <span style={{ fontSize:12,fontWeight:600,color:C.red }}>GPT-Enhanced Prompt</span>
+                </div>
+                <button onClick={() => setShowEnh(false)} style={{ background:"none",border:"none",cursor:"pointer",color:C.textMuted }}><X size={13}/></button>
+              </div>
+              <p style={{ fontSize:12,color:C.textSec,lineHeight:1.7 }}>{enhanced}</p>
+            </CP>
+          )}
+
+          <Btn onClick={generate} loading={generating} disabled={!prompt.trim()||!openAIKey} full style={{ padding:"12px" }}>
+            {generating ? "Generating…" : <><Play size={15}/>Generate Poster</>}
           </Btn>
 
           {!openAIKey && (
-            <div className="flex items-center gap-2 text-xs text-amber-500/80 bg-amber-950/20 border border-amber-900/30 rounded-lg px-3 py-2">
-              <AlertCircle size={13} />
-              <span>Add your OpenAI API key in API Settings to enable generation</span>
+            <div style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:C.redD,border:`1px solid ${C.redB}`,borderRadius:8,fontSize:12,color:C.red }}>
+              <AlertCircle size={13}/>Add your OpenAI API key in Settings
             </div>
           )}
         </div>
 
-        <div className="space-y-4">
-          <Card className="p-4">
+        {/* Right panel */}
+        <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+          <CP>
             <Lbl>Quick Templates</Lbl>
-            <div className="space-y-1.5">
-              {["Create a New Year 2025 post","Property launch announcement","Diwali festival offer post","Site visit this weekend","Possession ceremony update","5 years celebration milestone","Luxury apartment showcase"].map((t) => (
-                <button key={t} onClick={() => setPrompt(t)}
-                  className="w-full text-left text-xs px-2.5 py-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800/60 transition-all border border-transparent hover:border-gray-700/40">
-                  <span className="text-amber-600 mr-1">›</span> {t}
-                </button>
-              ))}
-            </div>
-          </Card>
+            {["Create a New Year 2025 post","Property launch for Skyline Tower","Diwali festival special offer","Site visit this Sunday — free shuttle","Possession ceremony celebration","5-year anniversary milestone","Luxury 3BHK showcase"].map(t => (
+              <button key={t} onClick={() => setPrompt(t)}
+                style={{ width:"100%",textAlign:"left",padding:"7px 8px",background:"transparent",border:"none",cursor:"pointer",fontSize:12,color:C.textSec,borderRadius:6,display:"block" }}
+                onMouseEnter={e=>{e.target.style.background=C.input;e.target.style.color=C.text;}}
+                onMouseLeave={e=>{e.target.style.background="transparent";e.target.style.color=C.textSec;}}>
+                <span style={{ color:C.red,marginRight:5 }}>›</span>{t}
+              </button>
+            ))}
+          </CP>
 
-          {logs.length > 0 && (
-            <Card className="p-4">
+          {logs.length>0 && (
+            <CP>
               <Lbl>Generation Log</Lbl>
-              <div className="space-y-1.5 max-h-52 overflow-y-auto">
-                {logs.map((l, i) => (
-                  <div key={i} className={`flex items-start gap-2 text-[11px] ${l.type === "success" ? "text-green-400" : l.type === "error" ? "text-red-400" : "text-gray-500"}`}>
-                    <span className="shrink-0 text-gray-700">{l.time}</span>
-                    <span>{l.msg}</span>
+              <div style={{ maxHeight:190,overflowY:"auto",display:"flex",flexDirection:"column",gap:4 }}>
+                {logs.map((l,i) => (
+                  <div key={i} style={{ display:"flex",gap:7,fontSize:11,color:l.type==="success"?C.green:l.type==="error"?C.red:C.textMuted }}>
+                    <span style={{ color:C.textMuted,flexShrink:0 }}>{l.time}</span>
+                    <span style={{ lineHeight:1.5 }}>{l.msg}</span>
                   </div>
                 ))}
-                {isGenerating && (
-                  <div className="flex items-center gap-2 text-[11px] text-amber-400">
-                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                    Processing...
-                  </div>
-                )}
+                {generating && <div style={{ display:"flex",alignItems:"center",gap:6,fontSize:11,color:C.red }}>
+                  <span style={{ width:6,height:6,borderRadius:"50%",background:C.red,animation:"spin 1s linear infinite",display:"inline-block" }}/>Processing…
+                </div>}
               </div>
-            </Card>
+            </CP>
           )}
 
-          <Card className="p-4">
-            <Lbl>Assets in Use</Lbl>
-            <div className="space-y-1.5">
-              {[
-                { label: "Logo",              val: assets.logo ? "✓ Ready" : "Not uploaded", ok: !!assets.logo },
-                { label: "Project images",    val: `${assets.images.length} files`,          ok: assets.images.length > 0 },
-                { label: "Reference posters", val: `${assets.posters.length} files`,         ok: assets.posters.length > 0 },
-                { label: "Brand name",        val: brand.companyName || "Not set",           ok: !!brand.companyName },
-              ].map(({ label, val, ok }) => (
-                <div key={label} className="flex items-center justify-between text-xs">
-                  <span className="text-gray-600">{label}</span>
-                  <span className={ok ? "text-green-400" : "text-gray-600"}>{val}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
+          <CP>
+            <Lbl>Cached Assets</Lbl>
+            {[
+              { label:"Logo",     ok:!!assets.logo,               val:assets.logo?"✓ Cached":"-" },
+              { label:"Ref images",ok:(assets.images||[]).length>0,val:`${(assets.images||[]).length} cached` },
+              { label:"Ref posters",ok:(assets.posters||[]).length>0,val:`${(assets.posters||[]).length} cached` },
+            ].map(({ label,ok,val }) => (
+              <div key={label} style={{ display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:5 }}>
+                <span style={{ color:C.textMuted }}>{label}</span>
+                <span style={{ color:ok?C.green:C.textMuted }}>{val}</span>
+              </div>
+            ))}
+          </CP>
         </div>
       </div>
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 // PREVIEW
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 
-function PreviewSection({ item, brand, assets, history, setHistory, showToast }) {
-  const [applying, setApplying] = useState(false);
-  const [copied,   setCopied]   = useState(false);
+function PreviewSection({ item, activeBrand, assets, history, setHistory, showToast }) {
+  const [applying,setApplying] = useState(false);
+  const [logoPos, setLogoPos]  = useState("top-right");
+  const [copied,  setCopied]   = useState(false);
 
-  if (!item) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="text-center">
-          <ImageIcon size={48} className="text-gray-700 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-gray-600">No preview yet</h3>
-          <p className="text-sm text-gray-700 mt-1">Generate a poster in Prompt Studio to preview it here</p>
-        </div>
+  useEffect(() => { if (item?.logoPos) setLogoPos(item.logoPos); else if (activeBrand?.logoPlacement) setLogoPos(activeBrand.logoPlacement); }, [item, activeBrand]);
+
+  if (!item) return (
+    <div style={{ display:"flex",alignItems:"center",justifyContent:"center",padding:28,height:"80vh" }}>
+      <div style={{ textAlign:"center" }}>
+        <ImageIcon size={44} color={C.textMuted} style={{ marginBottom:12 }}/>
+        <p style={{ fontSize:14,color:C.textSec }}>No preview yet — generate a poster first</p>
       </div>
-    );
-  }
+    </div>
+  );
 
   const download = () => {
-    const a = document.createElement("a");
-    a.href     = item.imageDataUrl;
-    a.download = `sparkos-${item.campaignType}-${item.id}.png`;
-    a.click();
-    showToast("Downloaded!", "success");
+    const a=document.createElement("a"); a.href=item.imageDataUrl; a.download=`sparkos-${item.campaignType}-${item.id}.png`; a.click();
+    showToast("Downloaded!","success");
   };
 
-  const copyUrl = () => {
-    navigator.clipboard.writeText(item.imageDataUrl.substring(0, 80) + "... [full base64]");
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const applyOverlay = async () => {
+  const applyLogo = async () => {
+    if (!assets.logo) { showToast("No logo uploaded in Assets","error"); return; }
     setApplying(true);
     try {
-      const overlaid = await applyBrandOverlay(item.imageDataUrl, brand, assets.logo?.dataUrl);
-      const updated  = { ...item, imageDataUrl: overlaid, mode: "overlay" };
-      setHistory((h) => h.map((g) => (g.id === item.id ? updated : g)));
-      showToast("Brand overlay applied!", "success");
-    } catch { showToast("Failed to apply overlay", "error"); }
+      const out = await applyLogoOverlay(item.imageDataUrl, activeBrand, assets.logo.dataUrl||assets.logo.url, logoPos);
+      const upd = { ...item, imageDataUrl:out, mode:"overlay", logoPos };
+      setHistory(h => h.map(g => g.id===item.id ? upd : g));
+      showToast("Logo placed!","success");
+    } catch { showToast("Overlay failed","error"); }
     setApplying(false);
   };
 
-  const arStyle = item.aspectRatio === "16:9" ? "16/9" : item.aspectRatio === "9:16" ? "9/16" : "1/1";
+  const arStyle = item.aspectRatio==="16:9"?"16/9":item.aspectRatio==="9:16"?"9/16":"1/1";
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-5 flex items-center justify-between">
+    <div style={{ padding:28,maxWidth:980,margin:"0 auto" }}>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20 }}>
         <div>
-          <h2 className="text-xl font-bold text-gray-100">Preview</h2>
-          <p className="text-xs text-gray-500 mt-0.5">{fmtDate(item.createdAt)}</p>
+          <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>Preview</h2>
+          <p style={{ fontSize:12,color:C.textSec,marginTop:4 }}>{fmtDate(item.createdAt)}</p>
         </div>
-        <div className="flex gap-2">
-          {item.mode !== "overlay" && (
-            <Btn onClick={applyOverlay} loading={applying} variant="secondary" size="sm">
-              <Layers size={13} /> Apply Brand Overlay
-            </Btn>
-          )}
-          <Btn onClick={copyUrl} variant="secondary" size="sm">
-            {copied ? <CheckCircle2 size={13} /> : <Copy size={13} />}
-            {copied ? "Copied!" : "Copy URL"}
+        <div style={{ display:"flex",gap:8 }}>
+          <Btn variant="secondary" size="sm" onClick={() => { navigator.clipboard.writeText("[Local image — CDN URL in production]"); setCopied(true); setTimeout(()=>setCopied(false),2000); }}>
+            {copied?<CheckCircle2 size={13}/>:<Copy size={13}/>}{copied?"Copied!":"Copy URL"}
           </Btn>
-          <Btn onClick={download} variant="primary" size="sm"><Download size={13} /> Download</Btn>
+          <Btn size="sm" onClick={download}><Download size={13}/>Download</Btn>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2">
-          <Card className="p-2 bg-gray-950">
-            <div className="relative bg-gray-800 rounded-lg overflow-hidden" style={{ aspectRatio: arStyle, maxHeight: "70vh" }}>
-              <img src={item.imageDataUrl} alt="Generated poster" className="w-full h-full object-contain" />
-            </div>
-          </Card>
-        </div>
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 300px",gap:16 }}>
+        <Card style={{ padding:8,background:"#060606" }}>
+          <div style={{ position:"relative",background:"#111",borderRadius:8,overflow:"hidden",aspectRatio:arStyle,maxHeight:"72vh" }}>
+            <img src={item.imageDataUrl} alt="Generated poster" style={{ width:"100%",height:"100%",objectFit:"contain" }}/>
+          </div>
+        </Card>
 
-        <div className="space-y-3">
-          <Card className="p-4">
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Details</h4>
-            <div className="space-y-3">
-              <div><span className="text-[11px] text-gray-600">Campaign</span><div className="mt-0.5"><Badge color="amber">{item.campaignType.replace(/_/g, " ")}</Badge></div></div>
-              <div><span className="text-[11px] text-gray-600">Aspect Ratio</span><div className="text-xs text-gray-300 mt-0.5">{item.aspectRatio}</div></div>
-              <div><span className="text-[11px] text-gray-600">Mode</span><div className="text-xs text-gray-300 mt-0.5">{item.mode === "overlay" ? "Brand Overlay" : "AI Full Control"}</div></div>
-              <div><span className="text-[11px] text-gray-600">Original Prompt</span><p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{item.prompt}</p></div>
-              {item.reasoning && <div><span className="text-[11px] text-gray-600">AI Reasoning</span><p className="text-xs text-gray-500 mt-0.5 italic">{item.reasoning}</p></div>}
+        <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+          <CP>
+            <span style={{ fontSize:11,fontWeight:600,color:C.textMuted,display:"block",marginBottom:12,textTransform:"uppercase",letterSpacing:".07em" }}>Details</span>
+            {[
+              { label:"Campaign", val: <Badge>{item.campaignType.replace(/_/g," ")}</Badge> },
+              { label:"Ratio",    val: item.aspectRatio },
+              { label:"Size",     val: getImageSize(item.aspectRatio,"gpt-image-1") },
+              { label:"Mode",     val: item.mode==="overlay"?"Logo Overlay":"AI Full Control" },
+            ].map(({ label,val }) => (
+              <div key={label} style={{ marginBottom:10 }}>
+                <span style={{ fontSize:11,color:C.textMuted }}>{label}</span>
+                <div style={{ fontSize:12,color:C.text,marginTop:3 }}>{val}</div>
+              </div>
+            ))}
+            <div>
+              <span style={{ fontSize:11,color:C.textMuted }}>Original Prompt</span>
+              <p style={{ fontSize:12,color:C.textSec,marginTop:3,lineHeight:1.6 }}>{item.prompt}</p>
             </div>
-          </Card>
-          <Card className="p-4">
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Enhanced Prompt</h4>
-            <p className="text-xs text-gray-500 leading-relaxed">{item.enhancedPrompt}</p>
-          </Card>
-          <Btn onClick={download} variant="primary" size="md" full><Download size={14} /> Download Full Resolution</Btn>
-          {item.mode !== "overlay" && (
-            <Btn onClick={applyOverlay} loading={applying} variant="secondary" size="md" full><Layers size={14} /> Apply Brand Overlay</Btn>
-          )}
+          </CP>
+
+          {/* Manual logo placement */}
+          <CP>
+            <Lbl>Place Logo Manually</Lbl>
+            <p style={{ fontSize:11,color:C.textMuted,marginBottom:10,lineHeight:1.5 }}>
+              The AI left a bright empty space for the logo. Select position and click to overlay.
+            </p>
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:5,marginBottom:10 }}>
+              {["top-left","top-center","top-right","bottom-left","bottom-center","bottom-right"].map(p => (
+                <button key={p} onClick={() => setLogoPos(p)}
+                  style={{ padding:"6px 4px",background:logoPos===p?C.redD:C.input,border:`1px solid ${logoPos===p?C.red:C.border}`,borderRadius:6,fontSize:10,color:logoPos===p?C.red:C.textMuted,cursor:"pointer" }}>
+                  {p.replace("-"," ")}
+                </button>
+              ))}
+            </div>
+            <Btn onClick={applyLogo} loading={applying} full size="sm"><Layers size={13}/>Place Logo at {logoPos.replace("-"," ")}</Btn>
+            {!assets.logo && <p style={{ fontSize:11,color:C.red,marginTop:6 }}>Upload logo in Assets first</p>}
+          </CP>
+
+          <Btn onClick={download} full style={{ padding:"11px" }}><Download size={14}/>Download</Btn>
         </div>
       </div>
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 // HISTORY
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 
-function HistorySection({ history, setPreview, setTab, setHistory, showToast }) {
+function HistorySection({ history, activeBrand, setPreview, setTab, setHistory, showToast }) {
   const [filter, setFilter] = useState("all");
-  const filtered  = filter === "all" ? history : history.filter((h) => h.campaignType === filter);
-  const allTypes  = [...new Set(history.map((h) => h.campaignType))];
+  const filtered = history.filter(h => (!activeBrand||h.brandId===activeBrand?.id) && (filter==="all"||h.campaignType===filter));
+  const types    = [...new Set(history.filter(h=>!activeBrand||h.brandId===activeBrand?.id).map(h=>h.campaignType))];
 
-  const download = (item) => {
-    const a = document.createElement("a");
-    a.href = item.imageDataUrl;
-    a.download = `sparkos-${item.campaignType}-${item.id}.png`;
-    a.click();
-    showToast("Downloaded!", "success");
+  const dl = item => {
+    const a=document.createElement("a"); a.href=item.imageDataUrl; a.download=`sparkos-${item.campaignType}-${item.id}.png`; a.click();
+    showToast("Downloaded!","success");
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-5 flex items-center justify-between">
+    <div style={{ padding:28,maxWidth:980,margin:"0 auto" }}>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20 }}>
         <div>
-          <h2 className="text-xl font-bold text-gray-100">Generation History</h2>
-          <p className="text-xs text-gray-500 mt-0.5">{history.length} poster{history.length !== 1 ? "s" : ""} generated</p>
+          <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>History</h2>
+          <p style={{ fontSize:12,color:C.textSec,marginTop:4 }}>{filtered.length} posters{activeBrand?` · ${activeBrand.companyName}`:""}</p>
         </div>
-        {history.length > 0 && (
-          <Btn onClick={() => { if (confirm("Clear all history?")) setHistory([]); }} variant="danger" size="sm">
-            <Trash2 size={13} /> Clear All
-          </Btn>
-        )}
+        {filtered.length>0 && <Btn variant="danger" size="sm" onClick={() => { if(confirm("Clear all?")) setHistory([]); }}><Trash2 size={13}/>Clear</Btn>}
       </div>
 
-      {history.length === 0 ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <Clock size={40} className="text-gray-700 mx-auto mb-3" />
-            <h3 className="text-base font-semibold text-gray-600">No generations yet</h3>
-            <p className="text-sm text-gray-700 mt-1">Your generated posters will appear here</p>
-          </div>
+      {filtered.length===0 ? (
+        <div style={{ textAlign:"center",paddingTop:60 }}>
+          <Clock size={40} color={C.textMuted} style={{ marginBottom:12 }}/>
+          <p style={{ color:C.textSec }}>No generations yet</p>
         </div>
       ) : (
         <>
-          <div className="flex gap-2 mb-4 flex-wrap">
-            <button onClick={() => setFilter("all")} className={`px-3 py-1 rounded-full text-xs transition-all ${filter === "all" ? "bg-amber-500 text-gray-950 font-semibold" : "bg-gray-800 text-gray-500 hover:text-gray-300"}`}>All ({history.length})</button>
-            {allTypes.map((t) => (
-              <button key={t} onClick={() => setFilter(t)} className={`px-3 py-1 rounded-full text-xs transition-all ${filter === t ? "bg-amber-500 text-gray-950 font-semibold" : "bg-gray-800 text-gray-500 hover:text-gray-300"}`}>
-                {t.replace(/_/g, " ")} ({history.filter((h) => h.campaignType === t).length})
+          <div style={{ display:"flex",gap:6,marginBottom:16,flexWrap:"wrap" }}>
+            {["all",...types].map(f => (
+              <button key={f} onClick={() => setFilter(f)}
+                style={{ padding:"5px 12px",borderRadius:20,border:`1px solid ${filter===f?C.red:C.border}`,background:filter===f?C.redD:"transparent",color:filter===f?C.red:C.textSec,fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                {f==="all"?"All":f.replace(/_/g," ")} ({f==="all"?filtered.length:history.filter(h=>h.campaignType===f&&(!activeBrand||h.brandId===activeBrand?.id)).length})
               </button>
             ))}
           </div>
-          <div className="grid grid-cols-4 gap-3">
-            {filtered.map((item) => (
-              <Card key={item.id} className="overflow-hidden group">
-                <div className="relative aspect-square bg-gray-800 cursor-pointer" onClick={() => { setPreview(item); setTab("preview"); }}>
-                  <img src={item.imageDataUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Eye size={20} className="text-white" />
-                  </div>
-                  {item.mode === "overlay" && <div className="absolute top-1.5 left-1.5"><Badge color="green">Branded</Badge></div>}
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12 }}>
+            {filtered.map(item => (
+              <Card key={item.id} style={{ overflow:"hidden" }}>
+                <div style={{ position:"relative",aspectRatio:"1",background:"#111",cursor:"pointer" }}
+                  onClick={() => { setPreview(item); setTab("preview"); }}>
+                  <img src={item.imageDataUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
+                  {item.mode==="overlay" && <div style={{ position:"absolute",top:6,left:6 }}><Badge color="green">Logo On</Badge></div>}
                 </div>
-                <div className="p-2.5">
-                  <div className="flex items-center gap-1.5 mb-1.5">
-                    <Badge color="amber">{item.campaignType.replace(/_/g, " ")}</Badge>
+                <div style={{ padding:"10px 12px" }}>
+                  <div style={{ display:"flex",gap:5,marginBottom:6,flexWrap:"wrap" }}>
+                    <Badge>{item.campaignType.replace(/_/g," ")}</Badge>
                     <Badge color="gray">{item.aspectRatio}</Badge>
                   </div>
-                  <p className="text-xs text-gray-500 line-clamp-2 mb-2">{item.prompt}</p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-gray-700">{fmtDate(item.createdAt)}</span>
-                    <button onClick={() => download(item)} className="text-gray-600 hover:text-amber-400 transition-colors"><Download size={13} /></button>
+                  <p style={{ fontSize:11,color:C.textSec,marginBottom:8,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" }}>{item.prompt}</p>
+                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+                    <span style={{ fontSize:10,color:C.textMuted }}>{fmtDate(item.createdAt)}</span>
+                    <button onClick={() => dl(item)} style={{ background:"none",border:"none",cursor:"pointer",color:C.textMuted,padding:4 }}
+                      onMouseEnter={e=>e.target.style.color=C.red} onMouseLeave={e=>e.target.style.color=C.textMuted}>
+                      <Download size={13}/>
+                    </button>
                   </div>
                 </div>
               </Card>
@@ -1215,355 +1413,355 @@ function HistorySection({ history, setPreview, setTab, setHistory, showToast }) 
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// WEBHOOK  — URL auto-detected from window.location
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
+// WEBHOOK
+// ─────────────────────────────────────────────────────────────
 
-function WebhookSettings({ brand, openAIKey, imageModel, enhanceModel, showToast }) {
-  // ── Auto-detect the app's own base URL ──────────────────
-  const baseUrl = getAppBaseUrl();
-  const webhookEndpoint      = `${baseUrl}/webhook/generate`;
-  const webhookEndpointSync  = `${baseUrl}/webhook/generate/sync`;
+function WebhookPage({ openAIKey, imageModel, enhanceModel, showToast }) {
+  const async_ = `${BACKEND}/webhook/generate`;
+  const sync_  = `${BACKEND}/webhook/generate/sync`;
+  const [payload, setPayload] = useState(JSON.stringify({ requestId:"req_001",brandId:"brand_001",campaignType:"new_year",prompt:"Create a premium New Year post",aspectRatio:"1:1",mode:"overlay",callbackUrl:"https://n8n.yoursite.com/cb" },null,2));
+  const [logs,    setLogs]    = useState([]);
+  const [simming, setSimming] = useState(false);
+  const [cp,      setCp]      = useState({});
 
-  const [callbackUrl,  setCallbackUrl]  = useState("");
-  const [testPayload,  setTestPayload]  = useState(
-    JSON.stringify({ requestId: "req_abc123", brandId: "brand_001", campaignType: "new_year", prompt: "Create a premium New Year post", aspectRatio: "1:1", mode: "overlay" }, null, 2)
-  );
-  const [webhookLogs,  setWebhookLogs]  = useState([]);
-  const [simulating,   setSimulating]   = useState(false);
-  const [copiedMain,   setCopiedMain]   = useState(false);
-  const [copiedSync,   setCopiedSync]   = useState(false);
+  const copy = (txt,k) => { navigator.clipboard.writeText(txt); setCp(p=>({...p,[k]:true})); setTimeout(()=>setCp(p=>({...p,[k]:false})),2000); };
 
-  const copyText = (text, setter) => {
-    navigator.clipboard.writeText(text);
-    setter(true);
-    setTimeout(() => setter(false), 2000);
-  };
-
-  const simulateWebhook = async () => {
-    if (!openAIKey && openAIKey !== "__env_configured__") { showToast("OpenAI key required", "error"); return; }
-    setSimulating(true);
-    const logEntry = { id: uid(), ts: new Date().toISOString(), status: "processing" };
-    setWebhookLogs((l) => [logEntry, ...l]);
-
+  const simulate = async () => {
+    if (!openAIKey) { showToast("Add OpenAI key in Settings","error"); return; }
+    setSimming(true);
+    const entry = { id:uid(), ts:new Date().toISOString(), status:"processing" };
+    setLogs(l=>[entry,...l]);
     try {
-      const parsed = JSON.parse(testPayload);
-      const sys = `You are a marketing prompt enhancer for ${brand.brandType || "real estate"}. Brand: ${brand.companyName || "Brand"}. Tone: ${brand.tone || "premium"}. Return ONLY JSON: { "enhancedPrompt": "...", "size": "1024x1024" }`;
-      const raw = await enhanceWithOpenAI(sys, `Enhance: "${parsed.prompt}" for campaign: ${parsed.campaignType}`, openAIKey, enhanceModel);
-      let ep;
-      try { ep = JSON.parse(raw.replace(/```json|```/g, "").trim()); } catch { ep = { enhancedPrompt: parsed.prompt, size: "1024x1024" }; }
-
-      await generateImage(ep.enhancedPrompt, ep.size || "1024x1024", openAIKey, imageModel);
-
-      const result = { success: true, generationId: `gen_${uid()}`, imageUrl: `${baseUrl}/public/generated/...`, brandId: parsed.brandId, campaignType: parsed.campaignType, createdAt: new Date().toISOString() };
-      setWebhookLogs((l) => l.map((lg) => lg.id === logEntry.id ? { ...lg, status: "success", result } : lg));
-      showToast("Simulation successful!", "success");
-    } catch (err) {
-      setWebhookLogs((l) => l.map((lg) => lg.id === logEntry.id ? { ...lg, status: "error", error: err.message } : lg));
-      showToast("Simulation failed: " + err.message, "error");
+      const p = JSON.parse(payload);
+      const raw = await enhanceWithGPT(
+        `You are a prompt enhancer. Return ONLY JSON: {"enhancedPrompt":"...","size":"1024x1024"}`,
+        `Enhance: "${p.prompt}"`, openAIKey, enhanceModel
+      );
+      let ep; try { ep=JSON.parse(raw.replace(/```json|```/g,"").trim()); } catch { ep={enhancedPrompt:p.prompt,size:"1024x1024"}; }
+      await generateImageFrontend(ep.enhancedPrompt, getImageSize(p.aspectRatio||"1:1",imageModel), openAIKey, imageModel);
+      const result = { success:true,generationId:`gen_${uid()}`,imageUrl:`${BACKEND}/public/generated/example.png`,createdAt:new Date().toISOString() };
+      setLogs(l=>l.map(lg=>lg.id===entry.id?{...lg,status:"success",result}:lg));
+      showToast("Simulation successful!","success");
+    } catch(e) {
+      setLogs(l=>l.map(lg=>lg.id===entry.id?{...lg,status:"error",error:e.message}:lg));
+      showToast("Failed: "+e.message,"error");
     }
-    setSimulating(false);
+    setSimming(false);
   };
+
+  const EndpointRow = ({ label, url, k, color }) => (
+    <div style={{ marginBottom:12 }}>
+      <Lbl>{label}</Lbl>
+      <div style={{ display:"flex",gap:8 }}>
+        <div style={{ flex:1,background:"#080808",border:`1px solid ${C.border}`,borderRadius:7,padding:"8px 12px",fontFamily:"monospace",fontSize:12,color,overflowX:"auto",whiteSpace:"nowrap" }}>{url}</div>
+        <button onClick={() => copy(url,k)} style={{ padding:"0 12px",background:C.input,border:`1px solid ${C.border}`,borderRadius:7,cursor:"pointer",color:C.textSec,flexShrink:0 }}>
+          {cp[k]?<CheckCircle2 size={13} color={C.green}/>:<Copy size={13}/>}
+        </button>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="mb-5">
-        <h2 className="text-xl font-bold text-gray-100">Webhook Integration</h2>
-        <p className="text-xs text-gray-500 mt-0.5">Connect with n8n, Zapier, Make, or any automation tool</p>
+    <div style={{ padding:28,maxWidth:820,margin:"0 auto" }}>
+      <div style={{ marginBottom:20 }}>
+        <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>Webhook Integration</h2>
+        <p style={{ fontSize:12,color:C.textSec,marginTop:4 }}>n8n · Zapier · Make · Any automation tool</p>
       </div>
 
-      {/* ── Auto-configured endpoints ───────────────────────── */}
-      <Card className="p-5 mb-4 border-green-900/40 bg-green-950/10">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          <h3 className="text-sm font-semibold text-green-400">Your Webhook Endpoints — Auto Configured</h3>
+      <CP style={{ border:`1px solid ${C.greenB}`,background:C.greenD,marginBottom:14 }}>
+        <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:14 }}>
+          <div style={{ width:7,height:7,borderRadius:"50%",background:C.green }}/>
+          <span style={{ fontSize:13,fontWeight:600,color:C.green }}>Endpoints — Auto Configured from Your Domain</span>
         </div>
+        <EndpointRow label="Async (recommended — returns immediately, sends result to callbackUrl)" url={async_} k="async" color={C.green}/>
+        <EndpointRow label="Sync (waits ~25s — returns full result directly)" url={sync_} k="sync" color="#42a5f5"/>
+      </CP>
 
-        <div className="space-y-3">
-          <div>
-            <Lbl>Async Endpoint (recommended for n8n)</Lbl>
-            <div className="flex gap-2">
-              <div className="flex-1 font-mono text-xs bg-gray-950 border border-gray-700/60 rounded-lg px-3 py-2 text-green-400 flex items-center">{webhookEndpoint}</div>
-              <button onClick={() => copyText(webhookEndpoint, setCopiedMain)}
-                className="px-3 bg-gray-800 border border-gray-700 rounded-lg text-gray-400 hover:text-green-400 transition-colors">
-                {copiedMain ? <CheckCircle2 size={14} className="text-green-400" /> : <Copy size={14} />}
-              </button>
-            </div>
-            <p className="text-[11px] text-gray-600 mt-1">Returns immediately, sends result to your callbackUrl when done</p>
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14 }}>
+        <CP>
+          <Lbl>Input</Lbl>
+          <div style={{ background:"#060606",border:`1px solid ${C.border}`,borderRadius:7,padding:12,fontFamily:"monospace",fontSize:11,color:C.green,maxHeight:200,overflow:"auto" }}>
+            <pre>{JSON.stringify({requestId:"req_001",brandId:"brand_001",campaignType:"new_year|festival|...",prompt:"Create a New Year post",aspectRatio:"1:1|4:5|9:16|16:9",mode:"ai|overlay",callbackUrl:"https://n8n.yoursite.com/cb"},null,2)}</pre>
           </div>
-
-          <div>
-            <Lbl>Sync Endpoint (waits for result ~20s)</Lbl>
-            <div className="flex gap-2">
-              <div className="flex-1 font-mono text-xs bg-gray-950 border border-gray-700/60 rounded-lg px-3 py-2 text-blue-400 flex items-center">{webhookEndpointSync}</div>
-              <button onClick={() => copyText(webhookEndpointSync, setCopiedSync)}
-                className="px-3 bg-gray-800 border border-gray-700 rounded-lg text-gray-400 hover:text-blue-400 transition-colors">
-                {copiedSync ? <CheckCircle2 size={14} className="text-blue-400" /> : <Copy size={14} />}
-              </button>
-            </div>
-            <p className="text-[11px] text-gray-600 mt-1">Waits for generation to complete, returns full result directly</p>
+        </CP>
+        <CP>
+          <Lbl>Success Response</Lbl>
+          <div style={{ background:"#060606",border:`1px solid ${C.border}`,borderRadius:7,padding:12,fontFamily:"monospace",fontSize:11,color:"#42a5f5",maxHeight:200,overflow:"auto" }}>
+            <pre>{JSON.stringify({success:true,generationId:"gen_k8f2m",imageUrl:`${BACKEND}/public/generated/gen_k8f2m.png`,thumbnailUrl:`${BACKEND}/public/thumbnails/gen_k8f2m_thumb.png`,brandId:"brand_001",campaignType:"new_year",createdAt:"2025-01-01T10:00:00Z"},null,2)}</pre>
           </div>
-        </div>
-      </Card>
-
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <Card className="p-4">
-          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Input Payload</h4>
-          <div className="bg-gray-950 rounded-lg p-3 font-mono text-xs text-green-400 overflow-auto max-h-52">
-            <pre>{JSON.stringify({ requestId: "req_abc123", brandId: "brand_001", campaignType: "new_year | festival | ...", prompt: "Create a New Year post", aspectRatio: "1:1 | 4:5 | 9:16 | 16:9", mode: "ai | overlay", callbackUrl: "https://your-n8n.com/callback" }, null, 2)}</pre>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Success Response</h4>
-          <div className="bg-gray-950 rounded-lg p-3 font-mono text-xs text-blue-400 overflow-auto max-h-52">
-            <pre>{JSON.stringify({ success: true, generationId: "gen_k8f2m", imageUrl: `${baseUrl}/public/generated/gen_k8f2m.png`, thumbnailUrl: `${baseUrl}/public/thumbnails/gen_k8f2m_thumb.png`, brandId: "brand_001", campaignType: "new_year", createdAt: new Date().toISOString() }, null, 2)}</pre>
-          </div>
-        </Card>
+        </CP>
       </div>
 
-      <Card className="p-5 mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="text-sm font-semibold text-gray-300">Webhook Tester</h4>
-          <Badge color="amber">Live Test</Badge>
+      <CP style={{ marginBottom:14 }}>
+        <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12 }}>
+          <span style={{ fontSize:13,fontWeight:600,color:C.text }}>Live Tester</span>
+          <Badge>Simulation</Badge>
         </div>
-        <div className="mb-3">
-          <Lbl>n8n Callback URL (optional)</Lbl>
-          <Inp value={callbackUrl} onChange={setCallbackUrl} placeholder="https://your-n8n.com/webhook/callback" />
-        </div>
-        <Lbl>Test Payload (JSON)</Lbl>
-        <div className="mb-3">
-          <Txta value={testPayload} onChange={setTestPayload} rows={7} mono />
-        </div>
-        <Btn onClick={simulateWebhook} loading={simulating} variant="primary">
-          <Play size={13} /> Run Live Simulation
-        </Btn>
-        {!openAIKey && <p className="text-xs text-amber-500/70 mt-2">⚠ Add OpenAI API key in API Settings first</p>}
-      </Card>
+        <div style={{ marginBottom:12 }}><Lbl>Test Payload</Lbl><Txta value={payload} onChange={setPayload} rows={7} mono/></div>
+        <Btn onClick={simulate} loading={simming}><Play size={13}/>Run Simulation</Btn>
+        {!openAIKey && <p style={{ fontSize:11,color:C.red,marginTop:8 }}>⚠ Add OpenAI key in Settings first</p>}
+      </CP>
 
-      {webhookLogs.length > 0 && (
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-semibold text-gray-300">Webhook Logs</h4>
-            <button onClick={() => setWebhookLogs([])} className="text-xs text-gray-600 hover:text-gray-400">Clear</button>
+      {logs.length>0 && (
+        <CP>
+          <div style={{ display:"flex",justifyContent:"space-between",marginBottom:10 }}>
+            <span style={{ fontSize:13,fontWeight:600,color:C.text }}>Logs</span>
+            <button onClick={() => setLogs([])} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,color:C.textMuted }}>Clear</button>
           </div>
-          <div className="space-y-2">
-            {webhookLogs.map((log) => (
-              <div key={log.id} className="flex items-start gap-3 p-3 bg-gray-950 rounded-lg">
-                <Badge color={log.status === "success" ? "green" : log.status === "error" ? "red" : "gray"}>{log.status}</Badge>
-                <div className="flex-1 min-w-0">
-                  <span className="text-[11px] text-gray-600">{fmtDate(log.ts)}</span>
-                  {log.result && <p className="text-xs text-green-400 mt-1">✓ generationId: {log.result.generationId}</p>}
-                  {log.error  && <p className="text-xs text-red-400 mt-1">{log.error}</p>}
-                </div>
+          {logs.map(l => (
+            <div key={l.id} style={{ display:"flex",alignItems:"flex-start",gap:10,padding:"8px 12px",background:"#080808",border:`1px solid ${C.border}`,borderRadius:7,marginBottom:6 }}>
+              <Badge color={l.status==="success"?"green":l.status==="error"?"red":"gray"}>{l.status}</Badge>
+              <div>
+                <span style={{ fontSize:11,color:C.textMuted }}>{fmtDate(l.ts)}</span>
+                {l.result && <p style={{ fontSize:11,color:C.green,marginTop:2 }}>✓ {l.result.generationId}</p>}
+                {l.error  && <p style={{ fontSize:11,color:C.red,marginTop:2  }}>{l.error}</p>}
               </div>
-            ))}
-          </div>
-        </Card>
+            </div>
+          ))}
+        </CP>
       )}
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// API SETTINGS  — OpenAI only, model picker for both
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
+// SETTINGS
+// ─────────────────────────────────────────────────────────────
 
-function ApiSettings({ openAIKey, setOpenAIKey, imageModel, setImageModel, enhanceModel, setEnhanceModel, showToast }) {
-  const [show,    setShow]    = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [local,   setLocal]   = useState(openAIKey);
+function SettingsPage({ openAIKey, setOpenAIKey, imageModel, setImageModel, enhanceModel, setEnhanceModel, showToast }) {
+  const [keyLocal,   setKeyLocal]   = useState(openAIKey);
+  const [showKey,    setShowKey]    = useState(false);
+  const [testing,    setTesting]    = useState(false);
+  const [curPwd,     setCurPwd]     = useState("");
+  const [newPwd,     setNewPwd]     = useState("");
+  const [confPwd,    setConfPwd]    = useState("");
+  const [changingPwd,setChangingPwd]= useState(false);
+
+  const saveKey = () => {
+    setOpenAIKey(keyLocal);
+    localStorage.setItem("sparkos_openai_key", keyLocal);
+    showToast("API key saved & persisted!","success");
+  };
 
   const testKey = async () => {
-    if (!local) { showToast("Enter an API key first", "error"); return; }
+    if (!keyLocal) { showToast("Enter a key first","error"); return; }
     setTesting(true);
     try {
-      const res = await fetch("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${local}` } });
-      if (res.ok) showToast("✓ OpenAI API key is valid!", "success");
-      else        showToast("Invalid API key", "error");
-    } catch { showToast("Connection failed", "error"); }
+      const r = await fetch("https://api.openai.com/v1/models",{ headers:{ Authorization:`Bearer ${keyLocal}` } });
+      if (r.ok) showToast("✓ API key valid!","success");
+      else      showToast("Invalid API key","error");
+    } catch { showToast("Connection failed","error"); }
     setTesting(false);
   };
 
-  const save = () => { setOpenAIKey(local); showToast("API key saved!", "success"); };
+  const saveModel = (lsKey, val, setter) => { setter(val); localStorage.setItem(lsKey, val); };
+
+  const changePwd = async () => {
+    if (!newPwd)         { showToast("Enter new password","error"); return; }
+    if (newPwd!==confPwd){ showToast("Passwords do not match","error"); return; }
+    if (newPwd.length<6) { showToast("Min 6 characters","error"); return; }
+    setChangingPwd(true);
+    try {
+      await api("/api/auth/change-password",{ method:"POST", body:JSON.stringify({ currentHash: await sha256(curPwd), newHash: await sha256(newPwd) }) });
+      showToast("Password changed!","success");
+      setCurPwd(""); setNewPwd(""); setConfPwd("");
+    } catch(e) { showToast(e.message,"error"); }
+    setChangingPwd(false);
+  };
+
+  const Section = ({ title, children }) => (
+    <div style={{ marginBottom:24 }}>
+      <p style={{ fontSize:11,fontWeight:600,color:C.textMuted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:10 }}>{title}</p>
+      {children}
+    </div>
+  );
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <div className="mb-5">
-        <h2 className="text-xl font-bold text-gray-100">API Settings</h2>
-        <p className="text-xs text-gray-500 mt-0.5">One OpenAI key powers everything — prompt enhancement + image generation</p>
+    <div style={{ padding:28,maxWidth:660,margin:"0 auto" }}>
+      <div style={{ marginBottom:24 }}>
+        <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>Settings</h2>
+        <p style={{ fontSize:12,color:C.textSec,marginTop:4 }}>API key · Models · Security</p>
       </div>
 
-      {/* OpenAI Key */}
-      <Card className="p-5 mb-4">
-        <div className="flex items-center gap-2 mb-4">
-          <Key size={16} className="text-amber-400" />
-          <h3 className="text-sm font-semibold text-gray-200">OpenAI API Key</h3>
-          {openAIKey && <Badge color="green">Active</Badge>}
-        </div>
-        <div className="flex gap-2 mb-3">
-          <div className="flex-1">
-            <Inp type={show ? "text" : "password"} value={local} onChange={setLocal} placeholder="sk-proj-..." />
+      <Section title="OpenAI API Key">
+        <CP>
+          <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:14 }}>
+            <Key size={15} color={C.red}/>
+            <span style={{ fontSize:13,fontWeight:600,color:C.text }}>OpenAI API Key</span>
+            {openAIKey && <Badge color="green">Active</Badge>}
           </div>
-          <button onClick={() => setShow(!show)} className="px-3 bg-gray-800 border border-gray-700 rounded-lg text-gray-400 hover:text-gray-200 transition-colors">
-            {show ? <EyeOff size={15} /> : <Eye size={15} />}
-          </button>
-        </div>
-        <div className="flex gap-2 mb-4">
-          <Btn onClick={save} variant="primary" size="sm">Save Key</Btn>
-          <Btn onClick={testKey} loading={testing} variant="secondary" size="sm">Test Connection</Btn>
-        </div>
-        <div className="p-3 bg-amber-950/20 border border-amber-900/30 rounded-lg">
-          <p className="text-xs text-amber-600 leading-relaxed">
-            <strong className="text-amber-500">Security:</strong> Key stored in memory only — never sent to any server except OpenAI. Cleared on tab close.
-          </p>
-        </div>
-      </Card>
-
-      {/* Image Generation Model */}
-      <Card className="p-5 mb-4">
-        <h3 className="text-sm font-semibold text-gray-200 mb-1">Image Generation Model</h3>
-        <p className="text-xs text-gray-600 mb-3">Choose the model that generates your posters</p>
-        <div className="space-y-2">
-          {IMAGE_MODELS.map((m) => (
-            <button key={m.value} onClick={() => setImageModel(m.value)}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${imageModel === m.value ? "border-amber-500 bg-amber-500/8" : "border-gray-700 hover:border-gray-600"}`}>
-              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${imageModel === m.value ? "border-amber-500" : "border-gray-600"}`}>
-                {imageModel === m.value && <div className="w-2 h-2 rounded-full bg-amber-500" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className={`text-sm font-medium ${imageModel === m.value ? "text-amber-400" : "text-gray-300"}`}>{m.label}</div>
-                <div className="text-[11px] text-gray-600 mt-0.5">{m.desc}</div>
-              </div>
-              {m.value === "gpt-image-1.5" && <Badge color="amber">Recommended</Badge>}
+          <div style={{ position:"relative",marginBottom:10 }}>
+            <input type={showKey?"text":"password"} value={keyLocal} onChange={e=>setKeyLocal(e.target.value)}
+              placeholder="sk-proj-..." style={{ ...SI.input,paddingRight:42 }}
+              onFocus={e=>focus(e,true)} onBlur={e=>focus(e,false)}/>
+            <button onClick={()=>setShowKey(!showKey)} style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.textMuted,cursor:"pointer" }}>
+              {showKey?<EyeOff size={14}/>:<Eye size={14}/>}
             </button>
-          ))}
-        </div>
-      </Card>
+          </div>
+          <div style={{ display:"flex",gap:8,marginBottom:14 }}>
+            <Btn onClick={saveKey} size="sm">Save Key</Btn>
+            <Btn variant="secondary" size="sm" onClick={testKey} loading={testing}>Test Connection</Btn>
+          </div>
+          <div style={{ padding:"10px 14px",background:C.greenD,border:`1px solid ${C.greenB}`,borderRadius:8 }}>
+            <p style={{ fontSize:11,color:C.textSec,lineHeight:1.6 }}>
+              <span style={{ color:C.green,fontWeight:600 }}>Persistent:</span> Saved to localStorage — survives page reloads. Never sent to our server. Only sent directly to OpenAI.
+            </p>
+          </div>
+        </CP>
+      </Section>
 
-      {/* Prompt Enhancement Model */}
-      <Card className="p-5">
-        <h3 className="text-sm font-semibold text-gray-200 mb-1">Prompt Enhancement Model</h3>
-        <p className="text-xs text-gray-600 mb-3">GPT model used to analyze your prompt and build the image prompt</p>
-        <div className="space-y-2">
-          {ENHANCE_MODELS.map((m) => (
-            <button key={m.value} onClick={() => setEnhanceModel(m.value)}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${enhanceModel === m.value ? "border-blue-500 bg-blue-500/8" : "border-gray-700 hover:border-gray-600"}`}>
-              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${enhanceModel === m.value ? "border-blue-500" : "border-gray-600"}`}>
-                {enhanceModel === m.value && <div className="w-2 h-2 rounded-full bg-blue-500" />}
-              </div>
-              <div className={`text-sm font-medium ${enhanceModel === m.value ? "text-blue-400" : "text-gray-300"}`}>{m.label}</div>
-            </button>
+      <Section title="Image Generation Model">
+        <CP style={{ display:"flex",flexDirection:"column",gap:8 }}>
+          {IMAGE_MODELS.map(m => (
+            <RCard key={m.value} selected={imageModel===m.value} onClick={() => saveModel("sparkos_image_model",m.value,setImageModel)}
+              label={m.label} desc={m.desc} badge={m.value==="gpt-image-1"?"Default ✓":""}/>
           ))}
-        </div>
-        <div className="mt-3 p-3 bg-blue-950/20 border border-blue-900/30 rounded-lg">
-          <p className="text-xs text-blue-400/80 leading-relaxed">
-            Same OpenAI API key is used for both enhancement and generation. No Anthropic key needed.
-          </p>
-        </div>
-      </Card>
+        </CP>
+      </Section>
+
+      <Section title="Prompt Enhancement Model">
+        <CP style={{ display:"flex",flexDirection:"column",gap:8 }}>
+          {ENHANCE_MODELS.map(m => (
+            <RCard key={m.value} selected={enhanceModel===m.value} onClick={() => saveModel("sparkos_enhance_model",m.value,setEnhanceModel)}
+              label={m.label} desc={m.desc} badge={m.value==="gpt-4o"?"Default":""}/>
+          ))}
+          <div style={{ padding:"10px 14px",background:"rgba(30,136,229,.08)",border:"1px solid rgba(30,136,229,.18)",borderRadius:8 }}>
+            <p style={{ fontSize:11,color:"#5bc0de" }}>gpt-4o supports vision — it reads your cached reference images to match design style.</p>
+          </div>
+        </CP>
+      </Section>
+
+      <Section title="Security">
+        <CP>
+          <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:14 }}>
+            <Shield size={15} color={C.red}/>
+            <span style={{ fontSize:13,fontWeight:600,color:C.text }}>Change Password</span>
+          </div>
+          <div style={{ display:"flex",flexDirection:"column",gap:10,marginBottom:14 }}>
+            <div><Lbl>Current Password</Lbl><Inp type="password" value={curPwd} onChange={setCurPwd} placeholder="Current password"/></div>
+            <div><Lbl>New Password</Lbl><Inp type="password" value={newPwd} onChange={setNewPwd} placeholder="Min 6 characters"/></div>
+            <div><Lbl>Confirm New</Lbl><Inp type="password" value={confPwd} onChange={setConfPwd} placeholder="Repeat new password"/></div>
+          </div>
+          <Btn onClick={changePwd} loading={changingPwd} size="sm"><Shield size={13}/>Change Password</Btn>
+        </CP>
+      </Section>
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 // ROOT APP
-// ═══════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 
 export default function SparkOs() {
+  const [loggedIn,     setLoggedIn]     = useState(!!sessionStorage.getItem("ss"));
   const [activeTab,    setActiveTab]    = useState("dashboard");
-  const [brand,        setBrand]        = useState({
-    companyName: "", website: "", phone: "", email: "", address: "",
-    tagline: "", brandType: "Premium Real Estate",
-    primaryColor: "#C9A96E", secondaryColor: "#1A1A2E",
-    textColor: "#FFFFFF", bgColor: "#0A0A0A",
-    instagram: "", facebook: "", youtube: "", rera: "",
-    tone: "premium, professional, aspirational",
-    designStyle: "luxury-minimal", typography: "elegant serif",
-    logoPlacement: "top-right",
-    showPhone: true, showWebsite: true, showLogo: true,
-    showTagline: true, showAddress: false, showSocial: false,
-    restrictions: "", aiInstructions: "", disclaimer: "",
-  });
-  const [assets,       setAssets]       = useState({ logo: null, images: [], posters: [], docs: [] });
+  const [brands,       setBrands]       = useState([]);
+  const [activeBrand,  setActiveBrand]  = useState(null);
+  const [assets,       setAssets]       = useState({ logo:null, images:[], posters:[], docs:[] });
   const [history,      setHistory]      = useState([]);
   const [preview,      setPreview]      = useState(null);
-  const [openAIKey,    setOpenAIKeyBase] = useState(() => localStorage.getItem("openai_key") || "");
-  const [imageModel,   setImageModel]   = useState("gpt-image-1.5");   // ← default to gpt-image-1.5
-  const [enhanceModel, setEnhanceModel] = useState("gpt-4o");
   const [toast,        setToast]        = useState(null);
 
-  // Persist key to localStorage & sync with backend
-  const setOpenAIKey = useCallback((key) => {
-    setOpenAIKeyBase(key);
-    localStorage.setItem("openai_key", key);
-  }, []);
+  // Persistent keys from localStorage
+  const [openAIKey,    setOpenAIKey]    = useState(() => localStorage.getItem("sparkos_openai_key")||"");
+  const [imageModel,   setImageModel]   = useState(() => localStorage.getItem("sparkos_image_model")||"gpt-image-1");
+  const [enhanceModel, setEnhanceModel] = useState(() => localStorage.getItem("sparkos_enhance_model")||"gpt-4o");
 
-  // Check if backend has env key configured
+  const showToast = useCallback((msg, type="success") => setToast({ msg, type, id: uid() }), []);
+
+  // Load brands from backend
   useEffect(() => {
-    const checkConfig = async () => {
-      try {
-        const res = await fetch("/api/config/check-key");
-        const { keyConfigured } = await res.json();
-        if (keyConfigured && !openAIKey) {
-          setOpenAIKey("__env_configured__"); // Marker that env key exists
-        }
-      } catch (err) {
-        console.error("Config check failed:", err);
+    if (!loggedIn) return;
+    api("/api/brands").then(res => {
+      const list   = res.brands || [];
+      setBrands(list);
+      const savedId = localStorage.getItem("ab");
+      const found   = list.find(b => b.id===savedId) || list[0] || null;
+      if (found) setActiveBrand(found);
+    }).catch(() => {});
+  }, [loggedIn]);
+
+  // Load assets for active brand + restore from IndexedDB cache
+  useEffect(() => {
+    if (!activeBrand) return;
+    api(`/api/assets/${activeBrand.id}`).then(async res => {
+      const a = res.assets || {};
+
+      // Restore logo
+      let logoData = null;
+      if (a.logo) {
+        const cached = await getCachedAsset(activeBrand.id, "logo");
+        logoData = { url: a.logoUrl, name: "logo", dataUrl: cached||null, fileId:"logo" };
       }
-    };
-    checkConfig();
-  }, []);
 
-  const showToast = useCallback((msg, type = "success") => {
-    setToast({ msg, type, id: uid() });
-  }, []);
+      // Restore images from IndexedDB cache
+      const restoreList = async (list) => {
+        const out = [];
+        for (const item of (list||[])) {
+          const cached = await getCachedAsset(activeBrand.id, item.id);
+          out.push({ ...item, dataUrl: cached||null });
+        }
+        return out;
+      };
 
-  const hasBrand = !!(brand.companyName && brand.primaryColor);
+      const [images, posters, docs] = await Promise.all([
+        restoreList(a.images),
+        restoreList(a.posters),
+        Promise.resolve(a.docs||[]),
+      ]);
+
+      setAssets({ logo: logoData, images, posters, docs });
+    }).catch(() => {});
+  }, [activeBrand?.id]);
+
+  const logout = () => { sessionStorage.removeItem("ss"); setLoggedIn(false); };
+
+  if (!loggedIn) return <Login onLogin={() => setLoggedIn(true)}/>;
+
+  const tabs = {
+    dashboard: <Dashboard history={history} brands={brands} activeBrand={activeBrand} assets={assets} setTab={setActiveTab}/>,
+    brands:    <BrandsManager brands={brands} activeBrand={activeBrand} setActiveBrand={setActiveBrand} setBrands={setBrands} setTab={setActiveTab} showToast={showToast}/>,
+    brandedit: activeBrand ? <BrandEdit brand={activeBrand} brands={brands} setBrands={setBrands} setActiveBrand={setActiveBrand} showToast={showToast}/> : null,
+    assets:    <AssetUpload activeBrand={activeBrand} assets={assets} setAssets={setAssets} showToast={showToast}/>,
+    studio:    <PromptStudio activeBrand={activeBrand} assets={assets} openAIKey={openAIKey} imageModel={imageModel} enhanceModel={enhanceModel} history={history} setHistory={setHistory} setPreview={setPreview} setTab={setActiveTab} showToast={showToast}/>,
+    preview:   <PreviewSection item={preview||history[0]||null} activeBrand={activeBrand} assets={assets} history={history} setHistory={setHistory} showToast={showToast}/>,
+    history:   <HistorySection history={history} activeBrand={activeBrand} setPreview={setPreview} setTab={setActiveTab} setHistory={setHistory} showToast={showToast}/>,
+    webhook:   <WebhookPage openAIKey={openAIKey} imageModel={imageModel} enhanceModel={enhanceModel} showToast={showToast}/>,
+    settings:  <SettingsPage openAIKey={openAIKey} setOpenAIKey={setOpenAIKey} imageModel={imageModel} setImageModel={setImageModel} enhanceModel={enhanceModel} setEnhanceModel={setEnhanceModel} showToast={showToast}/>,
+  };
 
   return (
-    <div className="flex h-screen bg-gray-950 text-gray-100 overflow-hidden" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div style={{ display:"flex",height:"100vh",background:C.bg,color:C.text,fontFamily:"'Inter',system-ui,sans-serif",overflow:"hidden" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        * { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-        select option { background: #1a1a2e; color: #e2e8f0; }
-        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        *{box-sizing:border-box;margin:0;padding:0}
+        ::-webkit-scrollbar{width:4px;height:4px}
+        ::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:4px}
+        select option{background:#0e0e0e;color:#eee}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        input::placeholder,textarea::placeholder{color:#383838;font-family:inherit}
+        button{font-family:inherit}
       `}</style>
 
-      <Sidebar active={activeTab} setActive={setActiveTab} histLen={history.length} hasKey={!!openAIKey} hasBrand={hasBrand} />
+      <Sidebar
+        active={activeTab==="brandedit"?"brands":activeTab}
+        setActive={setActiveTab}
+        brands={brands}
+        activeBrand={activeBrand}
+        setActiveBrand={(b) => { setActiveBrand(b); if(b) localStorage.setItem("ab",b.id); }}
+        histLen={history.length}
+        hasKey={!!openAIKey}
+        onLogout={logout}
+      />
 
-      <main className="flex-1 overflow-y-auto bg-gray-950">
-        {activeTab === "dashboard" && <Dashboard history={history} brand={brand} assets={assets} setTab={setActiveTab} />}
-        {activeTab === "brand"     && <BrandSetup brand={brand} setBrand={setBrand} onSave={() => showToast("Brand profile saved!", "success")} />}
-        {activeTab === "assets"    && <AssetUpload assets={assets} setAssets={setAssets} showToast={showToast} />}
-        {activeTab === "studio"    && (
-          <PromptStudio brand={brand} assets={assets} openAIKey={openAIKey} imageModel={imageModel}
-            enhanceModel={enhanceModel} history={history} setHistory={setHistory}
-            setPreview={setPreview} setTab={setActiveTab} showToast={showToast} />
-        )}
-        {activeTab === "preview"   && (
-          <PreviewSection item={preview || history[0]} brand={brand} assets={assets}
-            history={history} setHistory={setHistory} showToast={showToast} />
-        )}
-        {activeTab === "history"   && (
-          <HistorySection history={history} setPreview={setPreview} setTab={setActiveTab}
-            setHistory={setHistory} showToast={showToast} />
-        )}
-        {activeTab === "webhook"   && (
-          <WebhookSettings brand={brand} openAIKey={openAIKey} imageModel={imageModel}
-            enhanceModel={enhanceModel} showToast={showToast} />
-        )}
-        {activeTab === "settings"  && (
-          <ApiSettings openAIKey={openAIKey} setOpenAIKey={setOpenAIKey}
-            imageModel={imageModel} setImageModel={setImageModel}
-            enhanceModel={enhanceModel} setEnhanceModel={setEnhanceModel}
-            showToast={showToast} />
-        )}
+      <main style={{ flex:1,overflowY:"auto",background:C.bg }}>
+        {tabs[activeTab] || tabs.dashboard}
       </main>
 
-      {toast && <Toast key={toast.id} msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+      {toast && <Toast key={toast.id} msg={toast.msg} type={toast.type} onClose={() => setToast(null)}/>}
     </div>
   );
 }
