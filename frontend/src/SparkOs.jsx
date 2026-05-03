@@ -395,7 +395,7 @@ function Login({ onLogin }) {
       const res  = await api("/api/auth/login", { method:"POST", body: JSON.stringify({ hash }) });
       if (res.success) { sessionStorage.setItem("ss", "1"); onLogin(); }
       else setErr("Incorrect password");
-    } catch { setErr("Cannot reach server — make sure backend is running"); }
+    } catch { setErr("Backend offline. Run: cd backend && npm run dev"); }
     setBusy(false);
   };
 
