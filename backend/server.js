@@ -84,7 +84,7 @@ function getOpenAI(apiKey) {
 // dall-e-3      → 1024x1024, 1024x1792, 1792x1024
 // dall-e-2      → 1024x1024 only
 function getImageSize(ratio, model) {
-  const isGpt = model === "gpt-image-1" || model === "gpt-image-2";
+  const isGpt = model === "gpt-image-1" || model === "gpt-image-1.5" || model === "gpt-image-2";
   const isDe3 = model === "dall-e-3";
   const map = {
     "1:1":  { gpt: "1024x1024", de3: "1024x1024", de2: "1024x1024" },
@@ -169,7 +169,7 @@ Return ONLY valid JSON (no markdown):
 // ── Image Generation ──────────────────────────────────────────
 async function generateImage(prompt, size, apiKey, model = "gpt-image-1") {
   const openai     = getOpenAI(apiKey);
-  const isGptImage = model === "gpt-image-1" || model === "gpt-image-2";
+  const isGptImage = model === "gpt-image-1" || model === "gpt-image-1.5" || model === "gpt-image-2";
 
   const params = isGptImage
     ? { model, prompt, n: 1, size }
@@ -438,6 +438,9 @@ app.get("/api/webhook/logs", (_, res) => {
 });
 
 // ── Health ────────────────────────────────────────────────────
+// Root route so Render health check passes
+app.get("/", (_, res) => res.json({ status: "ok", app: "SparkOs v3" }));
+
 app.get("/health", (_, res) => res.json({
   status: "ok", version: "3.0.0", timestamp: new Date().toISOString(),
   openai: !!process.env.OPENAI_API_KEY,
@@ -453,7 +456,7 @@ if (process.env.NODE_ENV === "production") {
   }
 }
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n⚡ SparkOs v3 → http://localhost:${PORT}`);
   console.log(`   Webhook: POST http://localhost:${PORT}/webhook/generate\n`);
 });

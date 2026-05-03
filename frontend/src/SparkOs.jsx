@@ -19,10 +19,12 @@ import {
 const BACKEND = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
 
 const IMAGE_MODELS = [
-  { value: "gpt-image-1", label: "GPT Image 1",      desc: "Current default · Recommended" },
-  { value: "gpt-image-2", label: "GPT Image 2",      desc: "Requires special OpenAI access" },
-  { value: "dall-e-3",    label: "DALL-E 3",          desc: "High quality HD mode" },
-  { value: "dall-e-2",    label: "DALL-E 2",          desc: "Faster · Lower cost" },
+  { value: "gpt-image-1",   label: "GPT Image 1",    desc: "Stable · Recommended (default)" },
+  { value: "gpt-image-1.5", label: "GPT Image 1.5",  desc: "Use if you have access" },
+  { value: "gpt-image-2",   label: "GPT Image 2",    desc: "Use if you have access" },
+  { value: "dall-e-3",      label: "DALL-E 3",       desc: "High quality HD mode" },
+  { value: "dall-e-2",      label: "DALL-E 2",       desc: "Faster · Lower cost" },
+  { value: "custom",        label: "Custom Model…",  desc: "Type any OpenAI model name" },
 ];
 
 const ENHANCE_MODELS = [
@@ -55,7 +57,7 @@ const ASPECT_RATIOS = [
 
 // Correct size per model + ratio
 function getImageSize(ratio, model) {
-  const isGpt = model === "gpt-image-1" || model === "gpt-image-2";
+  const isGpt = model === "gpt-image-1" || model === "gpt-image-1.5" || model === "gpt-image-2";
   const isDe3 = model === "dall-e-3";
   const map = {
     "1:1":  { gpt: "1024x1024", de3: "1024x1024", de2: "1024x1024" },
@@ -179,10 +181,11 @@ async function enhanceWithGPT(systemPrompt, userMsg, apiKey, model = "gpt-4o") {
 }
 
 async function generateImageFrontend(prompt, size, apiKey, model) {
-  const isGpt = model === "gpt-image-1" || model === "gpt-image-2";
+  const actualModel = model === "custom" ? (localStorage.getItem("sparkos_custom_model") || "gpt-image-1") : model;
+  const isGpt = actualModel === "gpt-image-1" || actualModel === "gpt-image-1.5" || actualModel === "gpt-image-2";
   const body  = isGpt
-    ? { model, prompt, n: 1, size }
-    : { model, prompt, n: 1, size, quality: "hd", response_format: "b64_json" };
+    ? { model: actualModel, prompt, n: 1, size }
+    : { model: actualModel, prompt, n: 1, size, quality: "hd", response_format: "b64_json" };
   const res  = await fetch("https://api.openai.com/v1/images/generations", {
     method:  "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -404,7 +407,9 @@ function Login({ onLogin }) {
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} input::placeholder,textarea::placeholder{color:${C.textMuted}}`}</style>
       <div style={{ width:380,padding:44,background:C.card,border:`1px solid ${C.border}`,borderRadius:16,boxShadow:"0 24px 80px rgba(0,0,0,.8)" }}>
         <div style={{ textAlign:"center",marginBottom:36 }}>
-          <img src="/SparkOs_Logo_2.png" alt="SparkOs" style={{ height:38,width:"auto",marginBottom:18 }} onError={e=>{e.target.style.display="none";}}/>
+          <div style={{ display:"flex",justifyContent:"center",marginBottom:20 }}>
+            <img src="/SparkOs_Logo_2.png" alt="SparkOs" style={{ height:44,width:"auto",display:"block" }} onError={e=>{e.target.style.display="none";}}/>
+          </div>
           <p style={{ fontSize:13,color:C.textSec }}>Sign in to your workspace</p>
         </div>
         <Lbl>Password</Lbl>
@@ -457,8 +462,10 @@ function Sidebar({ active, setActive, brands, activeBrand, setActiveBrand, histL
   return (
     <aside style={{ width:210,background:C.sidebar,borderRight:`1px solid ${C.borderSub}`,display:"flex",flexDirection:"column",height:"100vh",flexShrink:0 }}>
       {/* Logo */}
-      <div style={{ padding:"16px 14px 12px",borderBottom:`1px solid ${C.borderSub}` }}>
-        <img src="/SparkOs_Logo_2.png" alt="SparkOs" style={{ height:28,width:"auto" }} onError={e=>{e.target.style.display="none";}}/>
+      <div style={{ padding:"14px 16px 12px",borderBottom:`1px solid ${C.borderSub}`,background:C.sidebar }}>
+        <img src="/SparkOs_Logo_2.png" alt="SparkOs"
+          style={{ height:36,width:"auto",maxWidth:"100%",display:"block",objectFit:"contain",filter:"brightness(1.05)" }}
+          onError={e=>{e.target.style.display="none";}}/>
       </div>
 
       {/* Brand switcher */}
@@ -1530,9 +1537,10 @@ function WebhookPage({ openAIKey, imageModel, enhanceModel, showToast }) {
 // ─────────────────────────────────────────────────────────────
 
 function SettingsPage({ openAIKey, setOpenAIKey, imageModel, setImageModel, enhanceModel, setEnhanceModel, showToast }) {
-  const [keyLocal,   setKeyLocal]   = useState(openAIKey);
-  const [showKey,    setShowKey]    = useState(false);
-  const [testing,    setTesting]    = useState(false);
+  const [keyLocal,    setKeyLocal]    = useState(openAIKey);
+  const [showKey,     setShowKey]     = useState(false);
+  const [testing,     setTesting]     = useState(false);
+  const [customModel, setCustomModel] = useState(() => localStorage.getItem("sparkos_custom_model") || "");
   const [curPwd,     setCurPwd]     = useState("");
   const [newPwd,     setNewPwd]     = useState("");
   const [confPwd,    setConfPwd]    = useState("");
@@ -1615,7 +1623,7 @@ function SettingsPage({ openAIKey, setOpenAIKey, imageModel, setImageModel, enha
         <CP style={{ display:"flex",flexDirection:"column",gap:8 }}>
           {IMAGE_MODELS.map(m => (
             <RCard key={m.value} selected={imageModel===m.value} onClick={() => saveModel("sparkos_image_model",m.value,setImageModel)}
-              label={m.label} desc={m.desc} badge={m.value==="gpt-image-1"?"Default ✓":""}/>
+              label={m.label} desc={m.desc} badge={m.value==="gpt-image-1"?"Default":""}/>
           ))}
         </CP>
       </Section>
@@ -1629,6 +1637,21 @@ function SettingsPage({ openAIKey, setOpenAIKey, imageModel, setImageModel, enha
           <div style={{ padding:"10px 14px",background:"rgba(30,136,229,.08)",border:"1px solid rgba(30,136,229,.18)",borderRadius:8 }}>
             <p style={{ fontSize:11,color:"#5bc0de" }}>gpt-4o supports vision — it reads your cached reference images to match design style.</p>
           </div>
+        </CP>
+      </Section>
+
+      <Section title="Custom Image Model Name">
+        <CP>
+          <p style={{ fontSize:12,color:C.textSec,marginBottom:12,lineHeight:1.6 }}>
+            If you select <strong style={{color:C.text}}>"Custom Model…"</strong> above, type the exact model name here.
+            This lets you use any OpenAI image model including <code style={{background:"#1a1a1a",padding:"1px 6px",borderRadius:3,fontSize:11}}>gpt-image-1.5</code> or future models.
+          </p>
+          <Lbl>Custom Model Name</Lbl>
+          <div style={{ display:"flex",gap:8 }}>
+            <Inp value={customModel} onChange={setCustomModel} placeholder="e.g. gpt-image-1.5"/>
+            <Btn size="sm" onClick={() => { localStorage.setItem("sparkos_custom_model", customModel); showToast("Custom model saved!", "success"); }}>Save</Btn>
+          </div>
+          {customModel && <p style={{ fontSize:11,color:C.green,marginTop:8 }}>✓ Will use: <strong>{customModel}</strong> when "Custom Model…" is selected</p>}
         </CP>
       </Section>
 
