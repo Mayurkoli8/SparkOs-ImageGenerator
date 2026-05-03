@@ -464,7 +464,7 @@ function Sidebar({ active, setActive, brands, activeBrand, setActiveBrand, histL
       {/* Logo */}
       <div style={{ padding:"14px 16px 12px",borderBottom:`1px solid ${C.borderSub}`,background:C.sidebar }}>
         <img src="/SparkOs_Logo_2.png" alt="SparkOs"
-          style={{ height:36,width:"auto",maxWidth:"100%",display:"block",objectFit:"contain",filter:"brightness(1.05)" }}
+          style={{ height:"auto",width:"auto",maxWidth:"100%",display:"block",objectFit:"contain",filter:"brightness(1.05)" }}
           onError={e=>{e.target.style.display="none";}}/>
       </div>
 
