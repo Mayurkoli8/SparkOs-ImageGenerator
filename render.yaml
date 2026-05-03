@@ -1,34 +1,39 @@
 services:
+  # ── Backend ───────────────────────────────────────────────────
   - type: web
     name: sparkos-backend
     runtime: node
     rootDir: backend
     buildCommand: npm install
-    startCommand: npm start
+    startCommand: node server.js
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 3001
+        value: 10000
       - key: OPENAI_API_KEY
         sync: false
       - key: DEFAULT_IMAGE_MODEL
-        value: gpt-image-2
+        value: gpt-image-1
       - key: BASE_URL
-        sync: false
+        sync: false          # e.g. https://sparkos-backend.onrender.com
       - key: FRONTEND_URL
-        sync: false
+        sync: false          # e.g. https://sparkos-imagegenerator.onrender.com
     disk:
       name: sparkos-storage
-      mountPath: /opt/render/project/src/backend/public
+      mountPath: /opt/render/project/src/public
       sizeGB: 10
 
+  # ── Frontend ─────────────────────────────────────────────────
   - type: web
     name: sparkos-frontend
     runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false          # MUST be set to your backend URL e.g. https://sparkos-backend.onrender.com
     routes:
       - type: rewrite
         source: /*
