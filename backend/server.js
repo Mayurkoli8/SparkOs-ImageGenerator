@@ -1,55 +1,62 @@
 /**
- * SparkOs Backend v3
- * Auth + Multi-brand + Asset storage + Image generation
- * 100% OpenAI — No Anthropic
+ * SparkOs Backend v5
+ * - Complete image with brand text (phone, website, tagline) rendered by AI
+ * - Aspect ratios fixed per model
+ * - Single generation mode (AI does everything)
+ * - Top-right corner kept clear of text (not a white box, just empty space)
+ * - API key + models + assets stored on server persistently
  */
 
 require("dotenv").config();
 
-const express  = require("express");
-const cors     = require("cors");
-const multer   = require("multer");
-const path     = require("path");
-const fs       = require("fs");
-const crypto   = require("crypto");
-const OpenAI   = require("openai");
-const { createCanvas, loadImage } = require("canvas");
+const express = require("express");
+const cors    = require("cors");
+const multer  = require("multer");
+const path    = require("path");
+const fs      = require("fs");
+const crypto  = require("crypto");
+const OpenAI  = require("openai");
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
-// ── Directories ──────────────────────────────────────────────
-["public/generated","public/thumbnails","uploads/logos","uploads/images","uploads/posters","uploads/docs","data"]
+["public/generated","public/thumbnails","uploads/logos","uploads/images",
+ "uploads/posters","uploads/docs","data"]
   .forEach(d => fs.mkdirSync(path.join(__dirname, d), { recursive: true }));
 
-// ── Middleware ────────────────────────────────────────────────
-app.use(cors({ origin: "*" }));  // Open CORS — restrict via FRONTEND_URL in production if needed
+app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use("/public",  express.static(path.join(__dirname, "public")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// ── JSON DB ───────────────────────────────────────────────────
+// ── DB ─────────────────────────────────────────────────────────────────────
 const DB_PATH = path.join(__dirname, "data/db.json");
+
+const DEFAULT_DB = () => ({
+  auth: { passwordHash: crypto.createHash("sha256").update("sparkos2024").digest("hex") },
+  settings: { openaiKey:"", imageModel:"gpt-image-1", enhanceModel:"gpt-4o" },
+  brands: {}, assets: {}, generations: [], webhookLogs: [],
+});
 
 function readDB() {
   if (!fs.existsSync(DB_PATH)) {
-    const init = {
-      auth: { passwordHash: crypto.createHash("sha256").update("sparkos2024").digest("hex") },
-      brands: {}, generations: [], webhookLogs: [], assets: {}
-    };
-    fs.writeFileSync(DB_PATH, JSON.stringify(init, null, 2));
-    return init;
+    const d = DEFAULT_DB();
+    fs.writeFileSync(DB_PATH, JSON.stringify(d, null, 2));
+    return d;
   }
-  try { return JSON.parse(fs.readFileSync(DB_PATH, "utf-8")); }
-  catch { return { auth:{ passwordHash: crypto.createHash("sha256").update("sparkos2024").digest("hex") }, brands:{}, generations:[], webhookLogs:[], assets:{} }; }
+  try {
+    const d = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+    if (!d.settings) d.settings = DEFAULT_DB().settings;
+    return d;
+  } catch { return DEFAULT_DB(); }
 }
 
 function writeDB(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
-// ── Multer ────────────────────────────────────────────────────
+// ── Multer ─────────────────────────────────────────────────────────────────
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const type = req.query.type || "images";
@@ -62,7 +69,6 @@ const storage = multer.diskStorage({
     cb(null, `${Date.now()}-${crypto.randomBytes(4).toString("hex")}${ext}`);
   },
 });
-
 const upload = multer({
   storage,
   limits: { fileSize: 20 * 1024 * 1024 },
@@ -70,110 +76,205 @@ const upload = multer({
     cb(null, /jpeg|jpg|png|gif|webp|svg|pdf|doc|docx|txt/i.test(path.extname(file.originalname))),
 });
 
-// ── Helpers ───────────────────────────────────────────────────
-function uid() { return Date.now().toString(36) + crypto.randomBytes(3).toString("hex"); }
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function uid()       { return Date.now().toString(36) + crypto.randomBytes(3).toString("hex"); }
 function getBaseUrl(req) { return process.env.BASE_URL || `${req.protocol}://${req.get("host")}`; }
-function getOpenAI(apiKey) {
-  const key = apiKey || process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("OPENAI_API_KEY not configured");
-  return new OpenAI({ apiKey: key });
+
+function getApiKey() {
+  const db  = readDB();
+  const key = db.settings?.openaiKey || process.env.OPENAI_API_KEY || "";
+  if (!key) throw new Error("OpenAI API key not configured. Go to Settings and add your key.");
+  return key;
 }
 
-// ── Correct size strings per model ────────────────────────────
-// gpt-image-1/2 → 1024x1024, 1024x1536, 1536x1024
-// dall-e-3      → 1024x1024, 1024x1792, 1792x1024
-// dall-e-2      → 1024x1024 only
+// ── ASPECT RATIO SIZES — verified per model ────────────────────────────────
+// gpt-image-1 supports: 1024x1024, 1024x1536, 1536x1024
+// dall-e-3    supports: 1024x1024, 1024x1792, 1792x1024
+// dall-e-2    supports: 1024x1024 only
 function getImageSize(ratio, model) {
-  const isGpt = model === "gpt-image-1" || model === "gpt-image-1.5" || model === "gpt-image-2";
+  const isGpt = ["gpt-image-1","gpt-image-1.5","gpt-image-2"].includes(model);
   const isDe3 = model === "dall-e-3";
-  const map = {
-    "1:1":  { gpt: "1024x1024", de3: "1024x1024", de2: "1024x1024" },
-    "4:5":  { gpt: "1024x1536", de3: "1024x1792", de2: "1024x1024" },
-    "9:16": { gpt: "1024x1536", de3: "1024x1792", de2: "1024x1024" },
-    "16:9": { gpt: "1536x1024", de3: "1792x1024", de2: "1024x1024" },
+  const sizes = {
+    "1:1":  { gpt:"1024x1024", de3:"1024x1024", de2:"1024x1024" },
+    "4:5":  { gpt:"1024x1536", de3:"1024x1792", de2:"1024x1024" },  // portrait
+    "9:16": { gpt:"1024x1536", de3:"1024x1792", de2:"1024x1024" },  // stories
+    "16:9": { gpt:"1536x1024", de3:"1792x1024", de2:"1024x1024" },  // landscape
   };
-  const entry = map[ratio] || map["1:1"];
-  if (isGpt) return entry.gpt;
-  if (isDe3) return entry.de3;
-  return entry.de2;
+  const e = sizes[ratio] || sizes["1:1"];
+  return isGpt ? e.gpt : isDe3 ? e.de3 : e.de2;
 }
 
-// ── Prompt Enhancement ────────────────────────────────────────
-async function enhancePrompt(userPrompt, brand, campaignType, aspectRatio, apiKey, gptModel = "gpt-4o", refImages = []) {
-  const openai = getOpenAI(apiKey);
+// ── CAMPAIGN TEXT TEMPLATES ────────────────────────────────────────────────
+// ── CAMPAIGN CONFIGS ──────────────────────────────────────────────────────
 
-  // Build vision message with reference images if available
-  const refImageBlock = refImages.length > 0
-    ? `\n\nReference images are attached. Analyze their visual style, color usage, layout, typography style, and mood. Replicate this aesthetic in the generated image.`
+const CAMPAIGN_CONFIG = {
+  new_year:            { headline:"Happy New Year 2025", sub:"Wishing You Joy, Success & Prosperity", vibe:"golden fireworks bokeh, midnight dark sky, glowing lights, celebration",          colors:"gold, midnight blue, champagne glow" },
+  festival:            { headline:"Festival Greetings",  sub:"Celebrate the Joy of the Season",       vibe:"festive lighting, warm diyas, colorful rangoli, celebratory atmosphere",        colors:"saffron, crimson, gold" },
+  property_launch:     { headline:"Grand Launch",        sub:"Your Dream Home Awaits",                vibe:"architectural photography, glass towers, luxury facade, blue sky, dramatic sun", colors:"steel blue, white, gold" },
+  offer:               { headline:"Limited Time Offer",  sub:"Exclusive Deal — Don't Miss Out",       vibe:"clean modern studio, bold graphic design, premium product feel",                 colors:"deep navy, gold, white" },
+  site_visit:          { headline:"You're Invited",      sub:"Visit Your Future Home This Weekend",   vibe:"welcoming entrance, manicured garden, soft golden hour lighting",                colors:"warm amber, forest green, ivory" },
+  possession:          { headline:"Welcome Home",        sub:"Keys Handover — A Dream Fulfilled",     vibe:"joyful family, luxury apartment entrance, keys in hand, soft sunlight",          colors:"warm gold, off-white, earthy tones" },
+  milestone:           { headline:"Celebrating 10 Years",sub:"A Decade of Trust & Excellence",        vibe:"trophy, corporate elegance, golden confetti, premium dark background",           colors:"gold, charcoal, white" },
+  brand_awareness:     { headline:"Excellence Redefined",sub:"Where Luxury Meets Lifestyle",          vibe:"sweeping city skyline aerial, glass buildings, dramatic clouds, sunset",          colors:"deep blue, gold, silver" },
+  testimonial:         { headline:"Happy Homeowners",    sub:"Real Stories. Real Smiles.",            vibe:"warm interior photography, cozy living room, natural light, joyful family",      colors:"warm beige, terracotta, white" },
+  project_highlight:   { headline:"Project Spotlight",  sub:"Discover Our Latest Masterpiece",       vibe:"architectural render, rooftop pool, panoramic view, luxury interior",            colors:"teal, white, dark charcoal" },
+  construction_update: { headline:"Taking Shape",        sub:"Progress Update — On Time, On Vision",  vibe:"construction timelapse feel, golden sunrise, cranes, rising structure",           colors:"orange safety, grey concrete, sky blue" },
+};
+
+const DEFAULT_CAMPAIGN = { headline:"Premium Living", sub:"Building Dreams, Creating Legacies", vibe:"luxury real estate aerial view, glass towers, city panorama, golden sunset", colors:"gold, dark navy, white" };
+
+// ── MASTER PROMPT BUILDER ──────────────────────────────────────────────────
+// Critical function — this directly controls image quality
+function buildMasterPrompt(userPrompt, brand, campaignType, detectedHeadline, refCount) {
+
+  const b      = brand;
+  const cfg    = CAMPAIGN_CONFIG[campaignType] || DEFAULT_CAMPAIGN;
+  const vibe   = cfg.vibe;
+  const colors = cfg.colors;
+
+  // Use AI-detected headline if available, else campaign default
+  const mainHeadline = detectedHeadline || cfg.headline;
+  const subHeadline  = cfg.sub;
+
+  // Brand identity
+  const companyName = b.companyName || "Your Company";
+  const tagline     = b.tagline     || "";
+  const phone       = b.phone       || "";
+  const website     = b.website     || "";
+  const brandType   = b.brandType   || "Premium Real Estate";
+  const designStyle = b.designStyle || "luxury minimal";
+  const tone        = b.tone        || "premium, aspirational, professional";
+  const extra       = b.aiInstructions || "";
+  const avoid       = b.restrictions   || "";
+
+  // Primary/secondary from brand
+  const primaryHex   = b.primaryColor   || "#e53935";
+  const secondaryHex = b.secondaryColor || "#1a1a1a";
+
+  // Reference image instruction
+  const refInstruction = refCount > 0
+    ? `REFERENCE STYLE: ${refCount} sample poster(s) provided. Carefully match their typography style, text layout, color grading, spacing, and overall aesthetic.`
     : "";
 
-  const system = `You are a world-class marketing creative director and AI image prompt engineer specializing in ${brand.brandType || "real estate"} marketing.
+  // Build exact text lines for AI to render
+  const bottomLines = [];
+  if (companyName) bottomLines.push(companyName);
+  if (tagline)     bottomLines.push(tagline);
+  if (phone && website) bottomLines.push(`${phone}   |   ${website}`);
+  else if (phone)       bottomLines.push(phone);
+  else if (website)     bottomLines.push(website);
+  const bottomBlock = bottomLines.join(" • ");
 
-Brand: ${brand.companyName || "Brand"}
-Type: ${brand.brandType || "Premium Real Estate"}
-Colors: Primary ${brand.primaryColor || "#e53935"}, Secondary ${brand.secondaryColor || "#1a1a1a"}
-Style: ${brand.designStyle || "luxury minimal"}
-Tone: ${brand.tone || "premium, aspirational, professional"}
-Tagline: ${brand.tagline || ""}
-AI Instructions: ${brand.aiInstructions || "none"}
-Restrictions: ${brand.restrictions || "none"}${refImageBlock}
+  return `You are creating a ${brandType} marketing poster. This must look like it was designed by a world-class professional graphic designer for Instagram.
 
-Transform the user's prompt into a MASTERFUL image generation prompt.
+${refInstruction}
 
-CRITICAL RULES — NEVER BREAK THESE:
-1. The image MUST contain CREATIVE, BEAUTIFUL campaign-specific TEXT rendered as part of the visual design
-   - Headlines, subheadings, taglines that match the campaign (e.g. "Happy New Year 2025", "Grand Launch", "Eid Mubarak")
-   - Typography should be artistic, large, prominent, and beautifully integrated into the composition
-   - Text should look like a professional designer placed it — not generic
-2. The image MUST have a CLEARLY VISIBLE EMPTY BRIGHT SPACE in the ${brand.logoPlacement || "top-right"} corner
-   - This space must be: bright white or very light (high contrast), approximately 120x120px worth of space
-   - NO design elements, NO text, NO patterns in this logo zone — it must be clean and empty
-   - Describe this explicitly: "clean bright white empty rectangular space in the [position] corner for logo placement"
-3. NO company logo, NO brand mark, NO watermark anywhere in the image
-4. Describe cinematic lighting, atmosphere, depth, materials, textures
-5. Composition must be Instagram-ready: visually stunning, high-contrast, professional
-6. Colors should harmonize with: ${brand.primaryColor || "#e53935"} and ${brand.secondaryColor || "#1a1a1a"}
+━━━ VISUAL SCENE ━━━
+Create a stunning ${vibe}. 
+The scene should feel: ${tone}. Dominant palette: ${colors}.
+Brand primary accent color: ${primaryHex}. Secondary: ${secondaryHex}.
+Design style: ${designStyle}.
+Campaign context: "${userPrompt}".
+${extra ? `Special request: ${extra}` : ""}
+${avoid ? `Do NOT include: ${avoid}` : ""}
+
+━━━ TEXT THAT MUST APPEAR IN THE IMAGE ━━━
+Render these text elements as part of the design — styled, positioned, beautiful:
+
+① MAIN HEADLINE — large, bold, dominant, takes up significant visual space:
+   "${mainHeadline}"
+   Style: Impactful display font, high contrast against background, decorative if appropriate
+
+② SUB-HEADLINE — medium size, beneath or beside main headline:
+   "${subHeadline}"
+   Style: Lighter weight, elegant, readable
+
+③ BOTTOM BRAND BAR — at the very bottom of the image, clean dark or colored strip/band:
+   "${bottomBlock}"
+   Style: Professional sans-serif, smaller size, clearly readable, white or light text on dark/colored background strip
+
+━━━ COMPOSITION RULES ━━━
+- TOP-RIGHT ~15% of image: intentionally left clear — no text elements here, natural background only
+- Headline: Dominant, upper half or center, designed with the scene not just placed on top
+- Bottom brand strip: Full-width band at bottom, ~12% height, shows company name + phone + website
+- Overall: magazine cover quality, dramatic depth, professional lighting, photorealistic or high-end illustration
+- Typography: letters must be CRISP, SHARP, READABLE — not blurry, not distorted
+- Aspect ratio composition: fill the full frame, no empty space at edges
+
+━━━ QUALITY STANDARD ━━━
+This poster will be published to Instagram. It must be thumb-stopping.
+- Cinematic lighting (dramatic shadows, god rays, bokeh, golden hour glow)
+- Ultra sharp details
+- Luxury feel — nothing cheap, nothing amateur
+- The text must look DESIGNED, not added after — it is part of the visual composition
+- Every element serves a purpose
+
+CRITICAL: Render all text legibly. Company name, phone number and website MUST be visible and readable at the bottom.`;
+}
+
+// ── ENHANCE PROMPT (detect campaign + get headline) ────────────────────────
+async function enhancePrompt(userPrompt, brand, campaignType, aspectRatio, gptModel, refImages, brandCtx) {
+  const openai = new OpenAI({ apiKey: getApiKey() });
+
+  const system = `You are a marketing strategist for real estate. Extract details from the user prompt and return JSON.
+
+Campaign types: festival, new_year, property_launch, offer, site_visit, possession, milestone, brand_awareness, testimonial, project_highlight, construction_update
+
+RULES for headline:
+- Be SPECIFIC: use names/numbers from user prompt (e.g. "Grand Launch — Skyline Residences", "Happy Diwali 2024", "20% Off This Weekend Only")
+- If year/festival/project name mentioned, include it
+- Keep under 6 words for main headline
+- Make it punchy, memorable, campaign-specific
+
+RULES for aspectRatio:
+- "9:16" for stories/reels content
+- "4:5" for portrait Instagram feed posts  
+- "1:1" for square feed posts (default for most campaigns)
+- "16:9" only if landscape explicitly requested
 
 Return ONLY valid JSON (no markdown):
 {
-  "campaignType": "festival|new_year|property_launch|offer|site_visit|possession|milestone|brand_awareness|testimonial|project_highlight|construction_update",
-  "enhancedPrompt": "full detailed image generation prompt — must mention creative text, empty logo zone, cinematic quality",
+  "campaignType": "detected type from list above",
+  "headline": "SPECIFIC punchy headline using details from user prompt",
   "aspectRatio": "1:1 or 4:5 or 9:16 or 16:9",
-  "reasoning": "brief"
+  "reasoning": "one line"
 }`;
 
-  const userContent = refImages.length > 0 ? [
-    { type: "text", text: `User prompt: "${userPrompt}". Campaign: ${campaignType}. Ratio: ${aspectRatio}.` },
-    ...refImages.slice(0, 2).map(url => ({ type: "image_url", image_url: { url, detail: "low" } }))
-  ] : `User prompt: "${userPrompt}". Campaign: ${campaignType}. Ratio: ${aspectRatio}.`;
+  const brandContext = [
+    brand.companyName ? `Company: ${brand.companyName}` : "",
+    brand.tagline     ? `Tagline: ${brand.tagline}` : "",
+  ].filter(Boolean).join(", ");
 
-  const messages = [
-    { role: "system", content: system },
-    { role: "user", content: userContent },
-  ];
-
-  const res = await openai.chat.completions.create({ model: gptModel, max_tokens: 900, temperature: 0.75, messages });
+  const userMsg = campaignType !== "auto"
+    ? `User prompt: "${userPrompt}". ${brandContext}. Campaign: ${campaignType}. Preferred ratio: ${aspectRatio}. Give a specific, creative headline.`
+    : `User prompt: "${userPrompt}". ${brandContext}. Preferred ratio: ${aspectRatio}. Detect campaign type and give specific headline.`;
 
   try {
-    return JSON.parse(res.choices[0].message.content.replace(/```json|```/g, "").trim());
+    const res = await openai.chat.completions.create({
+      model: gptModel || "gpt-4o",
+      max_tokens: 300,
+      temperature: 0.7,
+      messages: [{ role:"system", content:system }, { role:"user", content:userMsg }],
+    });
+    return JSON.parse(res.choices[0].message.content.replace(/```json|```/g,"").trim());
   } catch {
     return {
-      enhancedPrompt: userPrompt,
       campaignType: campaignType === "auto" ? "brand_awareness" : campaignType,
+      headline: "",
       aspectRatio: aspectRatio || "1:1",
-      reasoning: "Direct"
+      reasoning: "Direct",
     };
   }
 }
 
-// ── Image Generation ──────────────────────────────────────────
-async function generateImage(prompt, size, apiKey, model = "gpt-image-1") {
-  const openai     = getOpenAI(apiKey);
-  const isGptImage = model === "gpt-image-1" || model === "gpt-image-1.5" || model === "gpt-image-2";
+// ── IMAGE GENERATION ───────────────────────────────────────────────────────
+async function generateImage(prompt, size, model) {
+  const openai = new OpenAI({ apiKey: getApiKey() });
+  const isGpt  = ["gpt-image-1","gpt-image-1.5","gpt-image-2"].includes(model);
 
-  const params = isGptImage
-    ? { model, prompt, n: 1, size }
-    : { model, prompt, n: 1, size, quality: "hd", response_format: "b64_json" };
+  const params = isGpt
+    ? { model, prompt, n:1, size }
+    : { model, prompt, n:1, size, quality:"hd", response_format:"b64_json" };
 
   const res = await openai.images.generate(params);
   const b64 = res.data[0].b64_json || res.data[0].b64;
@@ -184,270 +285,277 @@ async function generateImage(prompt, size, apiKey, model = "gpt-image-1") {
     const r = await fetch(res.data[0].url);
     return Buffer.from(await r.arrayBuffer());
   }
-  throw new Error("No image data returned");
+  throw new Error("No image data returned from OpenAI");
 }
 
-// ── Canvas Logo Overlay ───────────────────────────────────────
-function rrect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
-  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
-  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
-}
+// ── GENERATION PIPELINE ────────────────────────────────────────────────────
+async function runPipeline({ prompt, brand, campaignType="auto", aspectRatio="1:1",
+  imageModel, enhanceModel, req }) {
 
-async function applyLogoOverlay(imageBuffer, brand, logoPath) {
-  const canvas = createCanvas(1080, 1080);
-  const ctx    = canvas.getContext("2d");
-  ctx.drawImage(await loadImage(imageBuffer), 0, 0, 1080, 1080);
+  const db     = readDB();
+  const iModel = imageModel   || db.settings.imageModel   || "gpt-image-1";
+  const eModel = enhanceModel || db.settings.enhanceModel || "gpt-4o";
 
-  if (logoPath && fs.existsSync(logoPath) && brand.showLogo !== false) {
-    try {
-      const logo = await loadImage(logoPath);
-      const pos = brand.logoPlacement || "top-right";
-      let lx, ly;
-      const lw = 110, lh = 110, pad = 16;
-      if (pos.includes("top"))    ly = pad; else ly = 1080 - lh - pad;
-      if (pos.includes("left"))   lx = pad; else if (pos.includes("center")) lx = (1080 - lw) / 2; else lx = 1080 - lw - pad;
+  // Step 1: Detect campaign + headline using GPT
+  const refImages  = getRefImages(brand.id, 2);
+  const analysis   = await enhancePrompt(prompt, brand, campaignType, aspectRatio, eModel, refImages, brand);
 
-      // White pill behind logo
-      ctx.shadowColor = "rgba(0,0,0,0.3)"; ctx.shadowBlur = 20;
-      ctx.fillStyle   = "rgba(255,255,255,0.97)";
-      rrect(ctx, lx - 10, ly - 10, lw + 20, lh + 20, 14); ctx.fill();
-      ctx.shadowBlur  = 0;
-      ctx.drawImage(logo, lx, ly, lw, lh);
-    } catch(e) { console.warn("Logo skip:", e.message); }
-  }
+  const finalCampaign = analysis.campaignType || campaignType;
+  const finalRatio    = analysis.aspectRatio  || aspectRatio;
+  const headline      = analysis.headline     || "";
 
-  return canvas.toBuffer("image/png");
-}
+  // Step 2: Build master prompt with ALL brand details for AI to render
+  const masterPrompt = buildMasterPrompt(prompt, brand, finalCampaign, headline, refImages.length);
 
-// ── Generation Pipeline ───────────────────────────────────────
-async function runPipeline({ prompt, brand, campaignType="auto", aspectRatio="1:1", mode="ai",
-  imageModel="gpt-image-1", enhanceModel="gpt-4o", apiKey, req, refImages=[] }) {
+  // Step 3: Generate image — AI renders complete poster with text + brand info
+  const size        = getImageSize(finalRatio, iModel);
+  const imageBuffer = await generateImage(masterPrompt, size, iModel);
 
-  const enhanced   = await enhancePrompt(prompt, brand, campaignType, aspectRatio, apiKey, enhanceModel, refImages);
-  const finalRatio = enhanced.aspectRatio || aspectRatio;
-  const size       = getImageSize(finalRatio, imageModel);
-
-  let imageBuffer  = await generateImage(enhanced.enhancedPrompt, size, apiKey, imageModel);
-
-  // Only apply logo overlay in overlay mode
-  if (mode === "overlay") {
-    const db        = readDB();
-    const bAssets   = db.assets[brand.id] || {};
-    const logoPath  = bAssets.logo ? path.join(__dirname, bAssets.logo) : null;
-    imageBuffer     = await applyLogoOverlay(imageBuffer, brand, logoPath);
-  }
-
+  // Step 4: Save
   const genId    = `gen_${uid()}`;
   const filename = `${genId}.png`;
   fs.writeFileSync(path.join(__dirname, "public/generated",  filename), imageBuffer);
   fs.writeFileSync(path.join(__dirname, "public/thumbnails", `${genId}_thumb.png`), imageBuffer);
 
-  const base         = getBaseUrl(req);
+  const base   = getBaseUrl(req);
   const record = {
     id: genId, brandId: brand.id || "default", prompt,
-    enhancedPrompt: enhanced.enhancedPrompt, campaignType: enhanced.campaignType,
-    aspectRatio: finalRatio, mode, imageModel, enhanceModel,
+    enhancedPrompt: masterPrompt,
+    campaignType: finalCampaign, headline,
+    aspectRatio: finalRatio, imageModel: iModel, enhanceModel: eModel,
     imageUrl:     `${base}/public/generated/${filename}`,
     thumbnailUrl: `${base}/public/thumbnails/${genId}_thumb.png`,
-    reasoning: enhanced.reasoning, createdAt: new Date().toISOString(),
+    reasoning: analysis.reasoning,
+    refImagesUsed: refImages.length,
+    createdAt: new Date().toISOString(),
   };
 
-  const db = readDB(); db.generations.unshift(record); writeDB(db);
+  db.generations.unshift(record);
+  writeDB(db);
   return record;
 }
 
-// ════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
 // ROUTES
-// ════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
 
-// ── Auth ─────────────────────────────────────────────────────
+app.get("/",       (_, res) => res.json({ status:"ok", app:"SparkOs v5" }));
+app.get("/health", (_, res) => {
+  const db  = readDB();
+  const key = db.settings?.openaiKey || process.env.OPENAI_API_KEY || "";
+  res.json({ status:"ok", version:"5.0.0", apiKeySet:!!key,
+    imageModel:db.settings?.imageModel||"gpt-image-1",
+    enhanceModel:db.settings?.enhanceModel||"gpt-4o" });
+});
+
+// ── Auth ───────────────────────────────────────────────────────────────────
 app.post("/api/auth/login", (req, res) => {
   const db   = readDB();
   const hash = req.body.hash;
-  if (!db.auth) db.auth = { passwordHash: crypto.createHash("sha256").update("sparkos2024").digest("hex") };
-  if (hash === db.auth.passwordHash) res.json({ success: true });
-  else res.status(401).json({ success: false, error: "Incorrect password" });
+  if (!db.auth) db.auth = DEFAULT_DB().auth;
+  if (hash === db.auth.passwordHash) res.json({ success:true });
+  else res.status(401).json({ success:false, error:"Incorrect password" });
 });
 
 app.post("/api/auth/change-password", (req, res) => {
-  const db  = readDB();
+  const db = readDB();
   const { currentHash, newHash } = req.body;
-  if (!db.auth) db.auth = { passwordHash: crypto.createHash("sha256").update("sparkos2024").digest("hex") };
-  if (currentHash !== db.auth.passwordHash) return res.status(401).json({ error: "Current password is incorrect" });
+  if (!db.auth) db.auth = DEFAULT_DB().auth;
+  if (currentHash !== db.auth.passwordHash)
+    return res.status(401).json({ error:"Current password is incorrect" });
   db.auth.passwordHash = newHash;
   writeDB(db);
-  res.json({ success: true });
+  res.json({ success:true });
 });
 
-// ── Brands ────────────────────────────────────────────────────
-app.get("/api/brands", (_, res) => {
+// ── Settings ───────────────────────────────────────────────────────────────
+app.get("/api/settings", (_, res) => {
   const db = readDB();
-  res.json({ brands: Object.values(db.brands || {}) });
+  const s  = db.settings || {};
+  const raw = s.openaiKey || process.env.OPENAI_API_KEY || "";
+  res.json({
+    apiKeySet:    !!raw,
+    apiKeyMasked: raw ? raw.slice(0,7)+"••••••••••••••••"+raw.slice(-4) : "",
+    imageModel:   s.imageModel   || "gpt-image-1",
+    enhanceModel: s.enhanceModel || "gpt-4o",
+  });
 });
 
-app.post("/api/brands", (req, res) => {
-  const db = readDB(); const id = `brand_${uid()}`;
-  db.brands[id] = { id, ...req.body, createdAt: new Date().toISOString() };
-  writeDB(db); res.json({ success: true, brand: db.brands[id] });
-});
-
-app.put("/api/brands/:id", (req, res) => {
+app.post("/api/settings", (req, res) => {
   const db = readDB();
-  if (!db.brands[req.params.id]) return res.status(404).json({ error: "Not found" });
-  db.brands[req.params.id] = { ...db.brands[req.params.id], ...req.body };
-  writeDB(db); res.json({ success: true, brand: db.brands[req.params.id] });
+  if (!db.settings) db.settings = DEFAULT_DB().settings;
+  const { openaiKey, imageModel, enhanceModel } = req.body;
+  if (openaiKey    !== undefined && openaiKey    !== "") db.settings.openaiKey    = openaiKey;
+  if (imageModel   !== undefined) db.settings.imageModel   = imageModel;
+  if (enhanceModel !== undefined) db.settings.enhanceModel = enhanceModel;
+  writeDB(db);
+  res.json({ success:true });
 });
 
-app.delete("/api/brands/:id", (req, res) => {
-  const db = readDB(); delete db.brands[req.params.id]; writeDB(db);
-  res.json({ success: true });
+app.post("/api/settings/test-key", async (req, res) => {
+  try {
+    const db  = readDB();
+    const key = req.body.openaiKey || db.settings?.openaiKey || process.env.OPENAI_API_KEY;
+    if (!key) return res.status(400).json({ success:false, error:"No key provided" });
+    const openai = new OpenAI({ apiKey: key });
+    await openai.models.list();
+    res.json({ success:true });
+  } catch(e) { res.status(400).json({ success:false, error:e.message }); }
 });
 
-// ── Assets ────────────────────────────────────────────────────
+// ── Brands ─────────────────────────────────────────────────────────────────
+app.get("/api/brands",     (_, res)  => { const db=readDB(); res.json({ brands:Object.values(db.brands||{}) }); });
+app.post("/api/brands",    (req,res) => { const db=readDB(); const id=`brand_${uid()}`; db.brands[id]={id,...req.body,createdAt:new Date().toISOString()}; writeDB(db); res.json({success:true,brand:db.brands[id]}); });
+app.put("/api/brands/:id", (req,res) => { const db=readDB(); if(!db.brands[req.params.id]) return res.status(404).json({error:"Not found"}); db.brands[req.params.id]={...db.brands[req.params.id],...req.body}; writeDB(db); res.json({success:true,brand:db.brands[req.params.id]}); });
+app.delete("/api/brands/:id",(req,res)=>{ const db=readDB(); delete db.brands[req.params.id]; delete db.assets[req.params.id]; writeDB(db); res.json({success:true}); });
+
+// ── Assets — upload + cache base64 in DB ──────────────────────────────────
 app.post("/api/assets/upload", upload.single("file"), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+  if (!req.file) return res.status(400).json({ error:"No file uploaded" });
   const db      = readDB();
   const brandId = req.body.brandId || "default";
   const type    = req.query.type || "images";
-  if (!db.assets[brandId]) db.assets[brandId] = { images: [], posters: [], docs: [] };
+  if (!db.assets[brandId]) db.assets[brandId] = { images:[], posters:[], docs:[] };
+
+  const filePath     = path.join(__dirname, `uploads/${type}/${req.file.filename}`);
   const relativePath = `uploads/${type}/${req.file.filename}`;
-  const url = `${req.protocol}://${req.get("host")}/${relativePath}`;
+  const url          = `${req.protocol}://${req.get("host")}/${relativePath}`;
+  const fileId       = uid();
+
+  // Cache base64 — used by pipeline for GPT vision without re-upload
+  let base64 = null;
+  const isImg = /jpeg|jpg|png|gif|webp/i.test(path.extname(req.file.originalname));
+  if (isImg && type !== "docs") {
+    try {
+      const buf = fs.readFileSync(filePath);
+      base64    = `data:${req.file.mimetype||"image/png"};base64,${buf.toString("base64")}`;
+    } catch(e) { console.warn("base64 cache failed:", e.message); }
+  }
+
+  const entry = { id:fileId, path:relativePath, url, name:req.file.originalname, size:req.file.size, base64 };
+
   if (type === "logo") {
-    db.assets[brandId].logo    = relativePath;
-    db.assets[brandId].logoUrl = url;
+    db.assets[brandId].logo       = relativePath;
+    db.assets[brandId].logoUrl    = url;
+    db.assets[brandId].logoBase64 = base64;
   } else {
     if (!db.assets[brandId][type]) db.assets[brandId][type] = [];
-    db.assets[brandId][type].push({ id: uid(), path: relativePath, url, name: req.file.originalname, size: req.file.size });
+    db.assets[brandId][type].push(entry);
   }
+
   writeDB(db);
-  res.json({ success: true, url, path: relativePath, type, fileId: uid() });
+  res.json({ success:true, url, path:relativePath, type, fileId });
 });
 
 app.get("/api/assets/:brandId", (req, res) => {
-  const db = readDB();
-  res.json({ assets: db.assets[req.params.brandId] || {} });
+  const db     = readDB();
+  const assets = db.assets[req.params.brandId] || {};
+  const strip  = list => (list||[]).map(({ base64, ...rest }) => rest);
+  res.json({ assets:{
+    logo:    assets.logo ? { url:assets.logoUrl, path:assets.logo } : null,
+    logoUrl: assets.logoUrl || null,
+    images:  strip(assets.images),
+    posters: strip(assets.posters),
+    docs:    strip(assets.docs),
+  }});
 });
 
-// ── Generate ─────────────────────────────────────────────────
+app.delete("/api/assets/:brandId/:type/:fileId", (req, res) => {
+  const db = readDB();
+  const { brandId, type, fileId } = req.params;
+  if (db.assets[brandId]?.[type]) {
+    const item = db.assets[brandId][type].find(i => i.id === fileId);
+    if (item) { try { fs.unlinkSync(path.join(__dirname, item.path)); } catch {} }
+    db.assets[brandId][type] = db.assets[brandId][type].filter(i => i.id !== fileId);
+    writeDB(db);
+  }
+  res.json({ success:true });
+});
+
+// ── Generate ───────────────────────────────────────────────────────────────
 app.post("/api/generate", async (req, res) => {
-  const { brandId, prompt, campaignType, aspectRatio, mode, imageModel, enhanceModel, refImages } = req.body;
-  if (!prompt) return res.status(400).json({ error: "prompt is required" });
-  const apiKey = req.headers["x-openai-key"] || process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(400).json({ error: "OpenAI API key required" });
+  const { brandId, prompt, campaignType, aspectRatio, imageModel, enhanceModel } = req.body;
+  if (!prompt) return res.status(400).json({ error:"prompt is required" });
   const db    = readDB();
-  const brand = brandId ? (db.brands[brandId] || {}) : (Object.values(db.brands)[0] || {});
+  const brand = brandId ? (db.brands[brandId]||{}) : (Object.values(db.brands)[0]||{});
   try {
-    const result = await runPipeline({
-      prompt, brand, campaignType, aspectRatio, mode,
-      imageModel:   imageModel   || process.env.DEFAULT_IMAGE_MODEL || "gpt-image-1",
-      enhanceModel: enhanceModel || "gpt-4o",
-      apiKey, req,
-      refImages:    refImages    || [],
-    });
-    res.json({ success: true, ...result });
-  } catch (err) {
+    const result = await runPipeline({ prompt, brand, campaignType, aspectRatio, imageModel, enhanceModel, req });
+    res.json({ success:true, ...result });
+  } catch(err) {
     console.error("Generate error:", err.message);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success:false, error:err.message });
   }
 });
 
-// ── History ───────────────────────────────────────────────────
+// ── History ────────────────────────────────────────────────────────────────
 app.get("/api/generations", (req, res) => {
-  const db = readDB();
+  const db  = readDB();
   let gens  = db.generations || [];
-  const { brandId, campaignType, limit = 50, offset = 0 } = req.query;
+  const { brandId, campaignType, limit=50, offset=0 } = req.query;
   if (brandId)      gens = gens.filter(g => g.brandId === brandId);
   if (campaignType) gens = gens.filter(g => g.campaignType === campaignType);
-  res.json({ total: gens.length, generations: gens.slice(Number(offset), Number(offset) + Number(limit)) });
+  res.json({ total:gens.length, generations:gens.slice(Number(offset), Number(offset)+Number(limit)) });
 });
 
 app.delete("/api/generations/:id", (req, res) => {
   const db  = readDB();
   const gen = db.generations.find(g => g.id === req.params.id);
-  if (gen) {
-    ["public/generated","public/thumbnails"].forEach(dir => {
-      const f = path.join(__dirname, dir, path.basename(gen.imageUrl || ""));
-      try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch {}
-    });
-  }
+  if (gen) ["public/generated","public/thumbnails"].forEach(dir => {
+    const f = path.join(__dirname, dir, path.basename(gen.imageUrl||""));
+    try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch {}
+  });
   db.generations = db.generations.filter(g => g.id !== req.params.id);
-  writeDB(db); res.json({ success: true });
+  writeDB(db);
+  res.json({ success:true });
 });
 
-// ── Webhook ───────────────────────────────────────────────────
+// ── Webhook ────────────────────────────────────────────────────────────────
 app.post("/webhook/generate", async (req, res) => {
-  const { requestId, brandId, campaignType, prompt, aspectRatio, mode, imageModel, enhanceModel, callbackUrl } = req.body;
-  if (!prompt) return res.status(400).json({ success: false, error: "prompt is required" });
-  const apiKey = req.headers["x-openai-key"] || process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(400).json({ success: false, error: "OPENAI_API_KEY not configured" });
-
+  const { requestId, brandId, campaignType, prompt, aspectRatio, imageModel, enhanceModel, callbackUrl } = req.body;
+  if (!prompt) return res.status(400).json({ success:false, error:"prompt is required" });
   const db    = readDB();
-  const brand = brandId ? (db.brands[brandId] || {}) : (Object.values(db.brands)[0] || {});
+  const brand = brandId ? (db.brands[brandId]||{}) : (Object.values(db.brands)[0]||{});
   const logId = uid();
-  db.webhookLogs.unshift({ id: logId, requestId, brandId, prompt, status: "processing", receivedAt: new Date().toISOString() });
+  db.webhookLogs.unshift({ id:logId, requestId, brandId, prompt, status:"processing", receivedAt:new Date().toISOString() });
   writeDB(db);
-
-  res.json({ success: true, status: "processing", requestId, logId });
-
+  res.json({ success:true, status:"processing", requestId, logId });
   setImmediate(async () => {
     try {
-      const result = await runPipeline({
-        prompt, brand, campaignType: campaignType || "auto",
-        aspectRatio: aspectRatio || "1:1", mode: mode || "ai",
-        imageModel:   imageModel   || "gpt-image-1",
-        enhanceModel: enhanceModel || "gpt-4o",
-        apiKey,
-        req: { protocol: "https", get: () => process.env.DOMAIN || "localhost:3001" },
-      });
-      const payload = { success: true, requestId, generationId: result.id, imageUrl: result.imageUrl, thumbnailUrl: result.thumbnailUrl, brandId: result.brandId, campaignType: result.campaignType, createdAt: result.createdAt };
+      const result  = await runPipeline({ prompt, brand, campaignType:campaignType||"auto", aspectRatio:aspectRatio||"1:1", imageModel, enhanceModel, req:{protocol:"https",get:()=>process.env.BASE_URL||"localhost:3001"} });
+      const payload = { success:true, requestId, generationId:result.id, imageUrl:result.imageUrl, thumbnailUrl:result.thumbnailUrl, brandId:result.brandId, campaignType:result.campaignType, headline:result.headline, createdAt:result.createdAt };
       const fresh = readDB();
-      const idx = fresh.webhookLogs.findIndex(l => l.id === logId);
-      if (idx > -1) Object.assign(fresh.webhookLogs[idx], { status: "success", ...payload });
+      const idx   = fresh.webhookLogs.findIndex(l => l.id===logId);
+      if (idx>-1) Object.assign(fresh.webhookLogs[idx], { status:"success", ...payload });
       writeDB(fresh);
       if (callbackUrl) {
-        const { default: fetch } = await import("node-fetch");
-        await fetch(callbackUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).catch(e => console.warn("CB:", e.message));
+        const { default:fetch } = await import("node-fetch");
+        await fetch(callbackUrl, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) }).catch(e=>console.warn("CB:",e.message));
       }
-    } catch (err) {
+    } catch(err) {
       const fresh = readDB();
-      const idx = fresh.webhookLogs.findIndex(l => l.id === logId);
-      if (idx > -1) { fresh.webhookLogs[idx].status = "error"; fresh.webhookLogs[idx].error = err.message; }
+      const idx   = fresh.webhookLogs.findIndex(l => l.id===logId);
+      if (idx>-1) { fresh.webhookLogs[idx].status="error"; fresh.webhookLogs[idx].error=err.message; }
       writeDB(fresh);
     }
   });
 });
 
 app.post("/webhook/generate/sync", async (req, res) => {
-  const { requestId, brandId, campaignType, prompt, aspectRatio, mode, imageModel, enhanceModel } = req.body;
-  if (!prompt) return res.status(400).json({ success: false, error: "prompt is required" });
-  const apiKey = req.headers["x-openai-key"] || process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(400).json({ success: false, error: "OPENAI_API_KEY not configured" });
+  const { requestId, brandId, campaignType, prompt, aspectRatio, imageModel, enhanceModel } = req.body;
+  if (!prompt) return res.status(400).json({ success:false, error:"prompt is required" });
   const db    = readDB();
-  const brand = brandId ? (db.brands[brandId] || {}) : (Object.values(db.brands)[0] || {});
+  const brand = brandId ? (db.brands[brandId]||{}) : (Object.values(db.brands)[0]||{});
   try {
-    const result = await runPipeline({ prompt, brand, campaignType: campaignType || "auto", aspectRatio: aspectRatio || "1:1", mode: mode || "ai", imageModel: imageModel || "gpt-image-1", enhanceModel: enhanceModel || "gpt-4o", apiKey, req });
-    res.json({ success: true, requestId, generationId: result.id, imageUrl: result.imageUrl, thumbnailUrl: result.thumbnailUrl, brandId: result.brandId, campaignType: result.campaignType, createdAt: result.createdAt });
-  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+    const result = await runPipeline({ prompt, brand, campaignType:campaignType||"auto", aspectRatio:aspectRatio||"1:1", imageModel, enhanceModel, req });
+    res.json({ success:true, requestId, generationId:result.id, imageUrl:result.imageUrl, thumbnailUrl:result.thumbnailUrl, brandId:result.brandId, campaignType:result.campaignType, headline:result.headline, createdAt:result.createdAt });
+  } catch(err) { res.status(500).json({ success:false, error:err.message }); }
 });
 
 app.get("/api/webhook/logs", (_, res) => {
-  const db = readDB(); res.json({ logs: (db.webhookLogs || []).slice(0, 100) });
+  const db = readDB();
+  res.json({ logs:(db.webhookLogs||[]).slice(0,100) });
 });
 
-// ── Health ────────────────────────────────────────────────────
-// Root route so Render health check passes
-app.get("/", (_, res) => res.json({ status: "ok", app: "SparkOs v3" }));
-
-app.get("/health", (_, res) => res.json({
-  status: "ok", version: "3.0.0", timestamp: new Date().toISOString(),
-  openai: !!process.env.OPENAI_API_KEY,
-  defaultModel: process.env.DEFAULT_IMAGE_MODEL || "gpt-image-1"
-}));
-
-// ── Serve frontend in production ──────────────────────────────
 if (process.env.NODE_ENV === "production") {
   const dist = path.join(__dirname, "../frontend/dist");
   if (fs.existsSync(dist)) {
@@ -456,9 +564,9 @@ if (process.env.NODE_ENV === "production") {
   }
 }
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n⚡ SparkOs v3 → http://localhost:${PORT}`);
-  console.log(`   Webhook: POST http://localhost:${PORT}/webhook/generate\n`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`\n⚡ SparkOs v5 → http://localhost:${PORT}`);
+  console.log(`   API key stored: ${!!readDB().settings?.openaiKey}`);
 });
 
 module.exports = app;

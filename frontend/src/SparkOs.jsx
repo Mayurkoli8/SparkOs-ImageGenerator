@@ -8,148 +8,10 @@ import {
   LayoutDashboard, Building2, FolderOpen, Sparkles, Image as ImageIcon,
   History, Webhook, Settings, Upload, Download, Copy, CheckCircle2,
   Key, Trash2, Eye, EyeOff, Star, TrendingUp, Clock, AlertCircle,
-  FileText, Play, CheckCheck, X, Layers, Lock, Plus, ChevronDown,
-  LogOut, Pencil, Users, Shield, RefreshCw, Info
+  FileText, Play, CheckCheck, X, Lock, Plus, ChevronDown,
+  LogOut, Pencil, Users, Shield, Info
 } from "lucide-react";
 
-// ─────────────────────────────────────────────────────────────
-// CONFIG
-// ─────────────────────────────────────────────────────────────
-
-const BACKEND = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
-
-const IMAGE_MODELS = [
-  { value: "gpt-image-1",   label: "GPT Image 1",    desc: "Stable · Recommended (default)" },
-  { value: "gpt-image-1.5", label: "GPT Image 1.5",  desc: "Use if you have access" },
-  { value: "gpt-image-2",   label: "GPT Image 2",    desc: "Use if you have access" },
-  { value: "dall-e-3",      label: "DALL-E 3",       desc: "High quality HD mode" },
-  { value: "dall-e-2",      label: "DALL-E 2",       desc: "Faster · Lower cost" },
-  { value: "custom",        label: "Custom Model…",  desc: "Type any OpenAI model name" },
-];
-
-const ENHANCE_MODELS = [
-  { value: "gpt-4o",      label: "GPT-4o",      desc: "Recommended · Best results" },
-  { value: "gpt-4o-mini", label: "GPT-4o Mini", desc: "Faster · Lower cost" },
-  { value: "gpt-4-turbo", label: "GPT-4 Turbo", desc: "Powerful alternative" },
-];
-
-const CAMPAIGN_TYPES = [
-  { value: "auto",                label: "Auto Detect" },
-  { value: "festival",            label: "Festival Post" },
-  { value: "new_year",            label: "New Year" },
-  { value: "property_launch",     label: "Property Launch" },
-  { value: "offer",               label: "Offer Promotion" },
-  { value: "site_visit",          label: "Site Visit Invite" },
-  { value: "possession",          label: "Possession Update" },
-  { value: "milestone",           label: "Milestone Announcement" },
-  { value: "brand_awareness",     label: "Brand Awareness" },
-  { value: "testimonial",         label: "Testimonial" },
-  { value: "project_highlight",   label: "Project Highlight" },
-  { value: "construction_update", label: "Construction Update" },
-];
-
-const ASPECT_RATIOS = [
-  { value: "1:1",  desc: "Square Feed" },
-  { value: "4:5",  desc: "Portrait Feed" },
-  { value: "9:16", desc: "Stories / Reels" },
-  { value: "16:9", desc: "Landscape" },
-];
-
-// Correct size per model + ratio
-function getImageSize(ratio, model) {
-  const isGpt = model === "gpt-image-1" || model === "gpt-image-1.5" || model === "gpt-image-2";
-  const isDe3 = model === "dall-e-3";
-  const map = {
-    "1:1":  { gpt: "1024x1024", de3: "1024x1024", de2: "1024x1024" },
-    "4:5":  { gpt: "1024x1536", de3: "1024x1792", de2: "1024x1024" },
-    "9:16": { gpt: "1024x1536", de3: "1024x1792", de2: "1024x1024" },
-    "16:9": { gpt: "1536x1024", de3: "1792x1024", de2: "1024x1024" },
-  };
-  const e = map[ratio] || map["1:1"];
-  return isGpt ? e.gpt : isDe3 ? e.de3 : e.de2;
-}
-
-const BRAND_TYPES = [
-  "Premium Real Estate","Luxury Apartments","Affordable Housing",
-  "Commercial Real Estate","Villa Projects","Plotted Development",
-];
-
-// ─────────────────────────────────────────────────────────────
-// THEME — SparkOs Classic Dark · Red accent
-// ─────────────────────────────────────────────────────────────
-
-const C = {
-  bg:          "#080808",
-  sidebar:     "#0c0c0c",
-  card:        "#111111",
-  input:       "#0c0c0c",
-  border:      "#202020",
-  borderSub:   "#181818",
-  text:        "#eeeeee",
-  textSec:     "#777777",
-  textMuted:   "#404040",
-  red:         "#e53935",
-  redH:        "#ef5350",
-  redD:        "rgba(229,57,53,0.10)",
-  redB:        "rgba(229,57,53,0.20)",
-  green:       "#43a047",
-  greenD:      "rgba(67,160,71,0.10)",
-  greenB:      "rgba(67,160,71,0.22)",
-  blue:        "#1e88e5",
-};
-
-// ─────────────────────────────────────────────────────────────
-// INDEXEDDB ASSET CACHE
-// ─────────────────────────────────────────────────────────────
-
-const IDB_NAME = "sparkos_assets";
-const IDB_STORE = "files";
-
-function openIDB() {
-  return new Promise((res, rej) => {
-    const req = indexedDB.open(IDB_NAME, 1);
-    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE, { keyPath: "key" });
-    req.onsuccess = e => res(e.target.result);
-    req.onerror   = () => rej(req.error);
-  });
-}
-
-async function cacheAsset(brandId, fileId, name, dataUrl) {
-  try {
-    const db  = await openIDB();
-    const tx  = db.transaction(IDB_STORE, "readwrite");
-    tx.objectStore(IDB_STORE).put({ key: `${brandId}:${fileId}`, brandId, fileId, name, dataUrl, ts: Date.now() });
-    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
-  } catch(e) { console.warn("IDB cache write failed:", e); }
-}
-
-async function getCachedAsset(brandId, fileId) {
-  try {
-    const db  = await openIDB();
-    const tx  = db.transaction(IDB_STORE, "readonly");
-    const req = tx.objectStore(IDB_STORE).get(`${brandId}:${fileId}`);
-    return await new Promise((res, rej) => { req.onsuccess = () => res(req.result?.dataUrl || null); req.onerror = rej; });
-  } catch { return null; }
-}
-
-async function getAllCachedForBrand(brandId) {
-  try {
-    const db    = await openIDB();
-    const tx    = db.transaction(IDB_STORE, "readonly");
-    const store = tx.objectStore(IDB_STORE);
-    const all   = await new Promise((res, rej) => { const r = store.getAll(); r.onsuccess = () => res(r.result); r.onerror = rej; });
-    return all.filter(a => a.brandId === brandId);
-  } catch { return []; }
-}
-
-async function clearBrandCache(brandId) {
-  try {
-    const db   = await openIDB();
-    const tx   = db.transaction(IDB_STORE, "readwrite");
-    const store = tx.objectStore(IDB_STORE);
-    const all  = await new Promise((res, rej) => { const r = store.getAll(); r.onsuccess = () => res(r.result); r.onerror = rej; });
-    for (const item of all.filter(a => a.brandId === brandId)) store.delete(item.key);
-  } catch {}
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -166,77 +28,13 @@ async function api(path, opts = {}) {
   return data;
 }
 
-async function enhanceWithGPT(systemPrompt, userMsg, apiKey, model = "gpt-4o") {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method:  "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model, max_tokens: 1000, temperature: 0.75,
-      messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userMsg }],
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message || "OpenAI Chat error");
-  return data.choices[0].message.content;
-}
 
-async function generateImageFrontend(prompt, size, apiKey, model) {
-  const actualModel = model === "custom" ? (localStorage.getItem("sparkos_custom_model") || "gpt-image-1") : model;
-  const isGpt = actualModel === "gpt-image-1" || actualModel === "gpt-image-1.5" || actualModel === "gpt-image-2";
-  const body  = isGpt
-    ? { model: actualModel, prompt, n: 1, size }
-    : { model: actualModel, prompt, n: 1, size, quality: "hd", response_format: "b64_json" };
-  const res  = await fetch("https://api.openai.com/v1/images/generations", {
-    method:  "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message || "Image generation failed");
-  const b64  = data.data[0].b64_json || data.data[0].b64;
-  return b64 ? `data:image/png;base64,${b64}` : data.data[0].url;
-}
 
 // ─────────────────────────────────────────────────────────────
 // CANVAS LOGO OVERLAY
 // ─────────────────────────────────────────────────────────────
 
-function rrect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
-  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
-  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
-}
 
-async function applyLogoOverlay(baseDataUrl, brand, logoDataUrl, position) {
-  const load = src => new Promise((res, rej) => {
-    const img = new Image(); img.crossOrigin = "anonymous";
-    img.onload = () => res(img); img.onerror = () => rej(); img.src = src;
-  });
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 1080;
-  const ctx = canvas.getContext("2d");
-  try {
-    ctx.drawImage(await load(baseDataUrl), 0, 0, 1080, 1080);
-    if (logoDataUrl) {
-      const logo = await load(logoDataUrl);
-      const pos  = position || brand.logoPlacement || "top-right";
-      const lw   = 110, lh = 110, pad = 16;
-      let lx, ly;
-      if (pos.includes("top"))    ly = pad; else ly = 1080 - lh - pad;
-      if (pos.includes("left"))   lx = pad;
-      else if (pos.includes("center")) lx = (1080 - lw) / 2;
-      else lx = 1080 - lw - pad;
-      ctx.shadowColor = "rgba(0,0,0,0.35)"; ctx.shadowBlur = 18;
-      ctx.fillStyle   = "rgba(255,255,255,0.97)";
-      rrect(ctx, lx - 12, ly - 12, lw + 24, lh + 24, 14); ctx.fill();
-      ctx.shadowBlur  = 0;
-      ctx.drawImage(logo, lx, ly, lw, lh);
-    }
-    return canvas.toDataURL("image/png", 0.95);
-  } catch { return baseDataUrl; }
-}
 
 // ─────────────────────────────────────────────────────────────
 // MISC HELPERS
@@ -405,7 +203,7 @@ function Login({ onLogin }) {
   return (
     <div style={{ minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center" }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} input::placeholder,textarea::placeholder{color:${C.textMuted}}`}</style>
-      <div style={{ width:380,padding:44,background:C.card,border:`1px solid ${C.border}`,borderRadius:16,boxShadow:"0 24px 80px rgba(0,0,0,.8)" }}>
+      <div style={{ width:"min(380px, 92vw)",padding:"32px 24px",background:C.card,border:`1px solid ${C.border}`,borderRadius:16,boxShadow:"0 24px 80px rgba(0,0,0,.8)" }}>
         <div style={{ textAlign:"center",marginBottom:36 }}>
           <div style={{ display:"flex",justifyContent:"center",marginBottom:20 }}>
             <img src="/SparkOs_Logo_2.png" alt="SparkOs" style={{ height:44,width:"auto",display:"block" }} onError={e=>{e.target.style.display="none";}}/>
@@ -452,6 +250,8 @@ const NAV = [
 
 function Sidebar({ active, setActive, brands, activeBrand, setActiveBrand, histLen, hasKey, onLogout }) {
   const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const isMobile = useIsMobile();
   const ref = useRef();
   useEffect(() => {
     const fn = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -459,12 +259,97 @@ function Sidebar({ active, setActive, brands, activeBrand, setActiveBrand, histL
     return () => document.removeEventListener("mousedown", fn);
   }, []);
 
+  // ── MOBILE: bottom tab bar + slide-in drawer ──────────────────────────────
+  if (isMobile) {
+    const BOTTOM_NAV = [
+      { k:"dashboard", icon: LayoutDashboard, label:"Home"    },
+      { k:"brands",    icon: Users,           label:"Brands"  },
+      { k:"studio",    icon: Sparkles,        label:"Studio"  },
+      { k:"history",   icon: History,         label:"History" },
+      { k:"settings",  icon: Settings,        label:"More"    },
+    ];
+    return (
+      <>
+        {/* Slide-in drawer */}
+        {menuOpen && (
+          <div style={{ position:"fixed",inset:0,zIndex:200 }}>
+            <div onClick={() => setMenuOpen(false)} style={{ position:"absolute",inset:0,background:"rgba(0,0,0,.7)" }}/>
+            <div style={{ position:"absolute",left:0,top:0,bottom:0,width:240,background:C.sidebar,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",overflowY:"auto" }}>
+              <div style={{ padding:"16px",borderBottom:`1px solid ${C.borderSub}`,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+                <img src="/SparkOs_Logo_2.png" alt="SparkOs" style={{ height:30,width:"auto" }} onError={e=>{e.target.style.display="none";}}/>
+                <button onClick={() => setMenuOpen(false)} style={{ background:"none",border:"none",color:C.textMuted,cursor:"pointer" }}><X size={18}/></button>
+              </div>
+              {/* Brand switcher mobile */}
+              <div ref={ref} style={{ padding:"10px",borderBottom:`1px solid ${C.borderSub}` }}>
+                <p style={{ fontSize:10,color:C.textMuted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5,paddingLeft:4 }}>Active Brand</p>
+                <button onClick={() => setOpen(!open)} style={{ width:"100%",background:C.input,border:`1px solid ${C.border}`,borderRadius:7,padding:"8px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer" }}>
+                  <div style={{ display:"flex",alignItems:"center",gap:7 }}>
+                    <div style={{ width:7,height:7,borderRadius:"50%",background:activeBrand?C.red:C.textMuted }}/>
+                    <span style={{ fontSize:12,fontWeight:600,color:activeBrand?C.text:C.textMuted }}>{activeBrand?.companyName||"Select Brand"}</span>
+                  </div>
+                  <ChevronDown size={12} color={C.textMuted} style={{ transform:open?"rotate(180deg)":"none" }}/>
+                </button>
+                {open && (
+                  <div style={{ background:C.card,border:`1px solid ${C.border}`,borderRadius:8,marginTop:4,overflow:"hidden" }}>
+                    {brands.map(b=>(
+                      <button key={b.id} onClick={()=>{setActiveBrand(b);setOpen(false);localStorage.setItem("ab",b.id);}}
+                        style={{ width:"100%",textAlign:"left",padding:"9px 12px",background:activeBrand?.id===b.id?C.redD:"transparent",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:8,borderBottom:`1px solid ${C.borderSub}` }}>
+                        <div style={{ width:6,height:6,borderRadius:"50%",background:activeBrand?.id===b.id?C.red:C.textMuted }}/>
+                        <span style={{ fontSize:12,color:activeBrand?.id===b.id?C.red:C.text }}>{b.companyName}</span>
+                      </button>
+                    ))}
+                    <button onClick={()=>{setActive("brands");setOpen(false);setMenuOpen(false);}} style={{ width:"100%",textAlign:"left",padding:"9px 12px",background:"transparent",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:7 }}>
+                      <Plus size={11} color={C.textSec}/><span style={{ fontSize:12,color:C.textSec }}>Add Brand</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+              {/* Full nav in drawer */}
+              <nav style={{ flex:1,padding:"8px" }}>
+                {NAV.map(({ k, label, icon: Icon }) => (
+                  <button key={k} onClick={() => { setActive(k); setMenuOpen(false); }}
+                    style={{ width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:7,border:"none",cursor:"pointer",marginBottom:2,background:active===k?C.redD:"transparent" }}>
+                    <Icon size={15} color={active===k?C.red:C.textMuted}/>
+                    <span style={{ fontSize:13,fontWeight:active===k?600:400,color:active===k?C.red:C.textMuted }}>{label}</span>
+                  </button>
+                ))}
+              </nav>
+              <div style={{ padding:"12px 14px",borderTop:`1px solid ${C.borderSub}` }}>
+                <div style={{ fontSize:11,color:hasKey?C.green:C.textMuted,marginBottom:8 }}>
+                  OpenAI {hasKey?"Connected":"Not Set"}
+                </div>
+                <button onClick={onLogout} style={{ display:"flex",alignItems:"center",gap:7,background:"none",border:"none",cursor:"pointer" }}>
+                  <LogOut size={13} color={C.textMuted}/><span style={{ fontSize:12,color:C.textMuted }}>Sign Out</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bottom tab bar */}
+        <div style={{ position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:C.sidebar,borderTop:`1px solid ${C.border}`,display:"flex",alignItems:"center" }}>
+          {BOTTOM_NAV.map(({ k, icon: Icon, label }) => {
+            const isMore = k === "settings";
+            const isActive = isMore ? ["settings","webhook","brandedit"].includes(active) : active===k;
+            return (
+              <button key={k} onClick={() => isMore ? setMenuOpen(true) : setActive(k)}
+                style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"10px 4px",background:"transparent",border:"none",cursor:"pointer",gap:3 }}>
+                <Icon size={20} color={isActive?C.red:C.textMuted}/>
+                <span style={{ fontSize:10,color:isActive?C.red:C.textMuted,fontWeight:isActive?600:400 }}>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </>
+    );
+  }
+
   return (
     <aside style={{ width:210,background:C.sidebar,borderRight:`1px solid ${C.borderSub}`,display:"flex",flexDirection:"column",height:"100vh",flexShrink:0 }}>
       {/* Logo */}
       <div style={{ padding:"14px 16px 12px",borderBottom:`1px solid ${C.borderSub}`,background:C.sidebar }}>
         <img src="/SparkOs_Logo_2.png" alt="SparkOs"
-          style={{ height:"auto",width:"auto",maxWidth:"100%",display:"block",objectFit:"contain",filter:"brightness(1.05)" }}
+          style={{ height:36,width:"auto",maxWidth:"100%",display:"block",objectFit:"contain",filter:"brightness(1.05)" }}
           onError={e=>{e.target.style.display="none";}}/>
       </div>
 
@@ -532,22 +417,23 @@ function Sidebar({ active, setActive, brands, activeBrand, setActiveBrand, histL
 
 function Dashboard({ history, brands, activeBrand, assets, setTab }) {
   const thisMonth = history.filter(h => new Date(h.createdAt).getMonth()===new Date().getMonth()).length;
+  const isMobile = useIsMobile();
   return (
-    <div style={{ padding:28,maxWidth:960,margin:"0 auto" }}>
-      <div style={{ marginBottom:24 }}>
-        <h1 style={{ fontSize:21,fontWeight:700,color:C.text,margin:0 }}>Dashboard</h1>
-        <p style={{ fontSize:13,color:C.textSec,marginTop:4 }}>
-          {activeBrand ? `Active brand: ${activeBrand.companyName}` : "Select or create a brand to get started"}
+    <div style={{ padding:isMobile?"16px":"28px",maxWidth:960,margin:"0 auto" }}>
+      <div style={{ marginBottom:20 }}>
+        <h1 style={{ fontSize:isMobile?18:21,fontWeight:700,color:C.text,margin:0 }}>Dashboard</h1>
+        <p style={{ fontSize:12,color:C.textSec,marginTop:4 }}>
+          {activeBrand ? `Active: ${activeBrand.companyName}` : "Select or create a brand to get started"}
         </p>
       </div>
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24 }}>
+      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:20 }}>
         <Stat label="Total Generated" value={history.length} icon={ImageIcon} color="red"/>
         <Stat label="This Month"      value={thisMonth}      icon={TrendingUp} color="green"/>
         <Stat label="Brands"          value={brands.length}  icon={Users}      color="blue"/>
         <Stat label="Assets Cached"   value={(assets.images||[]).length+(assets.posters||[]).length} icon={FolderOpen} color="purple"/>
       </div>
 
-      <div style={{ display:"grid",gridTemplateColumns:"2fr 1fr",gap:16,marginBottom:20 }}>
+      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr",gap:14,marginBottom:16 }}>
         <CP>
           <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
             <span style={{ fontSize:13,fontWeight:600,color:C.text }}>Quick Start</span>
@@ -595,7 +481,7 @@ function Dashboard({ history, brands, activeBrand, assets, setTab }) {
             <span style={{ fontSize:13,fontWeight:600,color:C.text }}>Recent Generations</span>
             <Btn variant="ghost" size="sm" onClick={() => setTab("history")}>View All</Btn>
           </div>
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8 }}>
             {history.slice(0,4).map(item => (
               <div key={item.id} onClick={() => setTab("preview")}
                 style={{ position:"relative",aspectRatio:"1",borderRadius:8,overflow:"hidden",background:"#1a1a1a",cursor:"pointer" }}>
@@ -617,6 +503,7 @@ function BrandsManager({ brands, activeBrand, setActiveBrand, setBrands, setTab,
   const [creating,setCreating]=useState(false);
   const [name,setName]=useState("");
   const [loading,setLoading]=useState(false);
+  const isMobile = useIsMobile();
 
   const create = async () => {
     if (!name.trim()) return;
@@ -652,8 +539,8 @@ function BrandsManager({ brands, activeBrand, setActiveBrand, setBrands, setTab,
   };
 
   return (
-    <div style={{ padding:28,maxWidth:760,margin:"0 auto" }}>
-      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:24 }}>
+    <div style={{ padding:isMobile?"16px":"28px",maxWidth:760,margin:"0 auto" }}>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:isMobile?16:24 }}>
         <div>
           <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>Brand Manager</h2>
           <p style={{ fontSize:12,color:C.textSec,marginTop:4 }}>Each brand has independent assets, settings and history</p>
@@ -716,6 +603,7 @@ function BrandEdit({ brand, brands, setBrands, setActiveBrand, showToast }) {
   const [f,  setF]    = useState({ ...brand });
   const [tab,setTab]  = useState("info");
   const [sav,setSav]  = useState(false);
+  const isMobile = useIsMobile();
 
   const u = k => v => setF(prev => ({ ...prev, [k]: v }));
 
@@ -753,10 +641,10 @@ function BrandEdit({ brand, brands, setBrands, setActiveBrand, showToast }) {
   );
 
   return (
-    <div style={{ padding:28,maxWidth:660,margin:"0 auto" }}>
-      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20 }}>
+    <div style={{ padding:isMobile?"16px":"28px",maxWidth:660,margin:"0 auto" }}>
+      <div style={{ display:"flex",alignItems:isMobile?"flex-start":"center",justifyContent:"space-between",flexDirection:isMobile?"column":"row",gap:isMobile?10:0,marginBottom:20 }}>
         <div>
-          <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>Edit Brand</h2>
+          <h2 style={{ fontSize:isMobile?18:20,fontWeight:700,color:C.text,margin:0 }}>Edit Brand</h2>
           <p style={{ fontSize:12,color:C.red,marginTop:4 }}>{f.companyName}</p>
         </div>
         <Btn onClick={save} loading={sav}><CheckCircle2 size={14}/>Save Changes</Btn>
@@ -768,7 +656,7 @@ function BrandEdit({ brand, brands, setBrands, setActiveBrand, showToast }) {
 
       {tab==="info" && (
         <CP style={{ display:"flex",flexDirection:"column",gap:14 }}>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr",gap:12 }}>
             <div><Lbl>Company Name *</Lbl><Inp value={f.companyName||""} onChange={u("companyName")} placeholder="Prestige Group"/></div>
             <div><Lbl>Brand Type</Lbl><Sel value={f.brandType||"Premium Real Estate"} onChange={u("brandType")} options={BRAND_TYPES.map(b=>({value:b,label:b}))}/></div>
           </div>
@@ -811,7 +699,7 @@ function BrandEdit({ brand, brands, setBrands, setActiveBrand, showToast }) {
       {tab==="rules" && (
         <CP style={{ display:"flex",flexDirection:"column",gap:14 }}>
           <div>
-            <Lbl>Logo Placement (empty space in AI image)</Lbl>
+            <Lbl>Top-Right Corner (AI keeps this area clear)</Lbl>
             <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6 }}>
               {["top-left","top-center","top-right","bottom-left","bottom-center","bottom-right"].map(p => (
                 <button key={p} onClick={() => u("logoPlacement")(p)}
@@ -820,14 +708,14 @@ function BrandEdit({ brand, brands, setBrands, setActiveBrand, showToast }) {
                 </button>
               ))}
             </div>
-            <p style={{ fontSize:11,color:C.textMuted,marginTop:6 }}>AI will leave a bright empty space here — you manually place logo after download</p>
+            <p style={{ fontSize:11,color:C.textMuted,marginTop:6 }}>AI will leave this corner free of text elements — natural background only, no white box.</p>
           </div>
           <div>
-            <Lbl>Always Include in Overlay</Lbl>
+            <Lbl>Brand Details to Show in Image</Lbl>
             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
               <CRow k="showPhone"   label="Phone Number"/>
               <CRow k="showWebsite" label="Website URL"/>
-              <CRow k="showLogo"    label="Logo (overlay mode)"/>
+              <CRow k="showLogo"    label="Add logo watermark"/>
               <CRow k="showTagline" label="Tagline"/>
             </div>
           </div>
@@ -845,6 +733,7 @@ function BrandEdit({ brand, brands, setBrands, setActiveBrand, showToast }) {
 // ─────────────────────────────────────────────────────────────
 
 function AssetUpload({ activeBrand, assets, setAssets, showToast }) {
+  const isMobile = useIsMobile();
   if (!activeBrand) return (
     <div style={{ padding:28,textAlign:"center",paddingTop:80 }}>
       <FolderOpen size={36} color={C.textMuted} style={{ marginBottom:12 }}/>
@@ -854,6 +743,7 @@ function AssetUpload({ activeBrand, assets, setAssets, showToast }) {
 
   const uploadFile = async (file, type) => {
     try {
+      // Read dataUrl just for local preview display
       const dataUrl  = await fileToDataUrl(file);
       const formData = new FormData();
       formData.append("file", file);
@@ -861,14 +751,10 @@ function AssetUpload({ activeBrand, assets, setAssets, showToast }) {
       const res  = await fetch(`${BACKEND}/api/assets/upload?type=${type}`, { method:"POST", body:formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-
-      // Cache in IndexedDB
-      const fileId = data.fileId || uid();
-      await cacheAsset(activeBrand.id, fileId, file.name, dataUrl);
-
+      // Server caches base64 in DB automatically on upload — no browser caching needed
       setAssets(prev => {
-        if (type==="logo") return { ...prev, logo:{ name:file.name, dataUrl, url:data.url, fileId } };
-        return { ...prev, [type]:[...(prev[type]||[]), { id:fileId, name:file.name, dataUrl, url:data.url }] };
+        if (type==="logo") return { ...prev, logo:{ name:file.name, dataUrl, url:data.url, fileId:data.fileId } };
+        return { ...prev, [type]:[...(prev[type]||[]), { id:data.fileId, name:file.name, dataUrl, url:data.url }] };
       });
       return true;
     } catch(e) { showToast(e.message,"error"); return false; }
@@ -894,7 +780,7 @@ function AssetUpload({ activeBrand, assets, setAssets, showToast }) {
       {type==="logo" && assets.logo ? (
         <div>
           <div style={{ width:"100%",height:110,background:C.input,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8 }}>
-            <img src={assets.logo.dataUrl||assets.logo.url} alt="logo" style={{ maxWidth:"100%",maxHeight:"100%",objectFit:"contain",padding:10 }}/>
+            <img src={assets.logo.url||assets.logo.dataUrl} alt="logo" style={{ maxWidth:"100%",maxHeight:"100%",objectFit:"contain",padding:10 }}/>
           </div>
           <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
             <span style={{ fontSize:11,color:C.textMuted }}>{assets.logo.name}</span>
@@ -914,7 +800,7 @@ function AssetUpload({ activeBrand, assets, setAssets, showToast }) {
         <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginTop:10 }}>
           {(assets[type]||[]).map(item => (
             <div key={item.id} style={{ position:"relative",aspectRatio:"1",borderRadius:7,overflow:"hidden",background:"#1a1a1a" }}>
-              {item.dataUrl ? <img src={item.dataUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/> :
+              {(item.url||item.dataUrl) ? <img src={item.url||item.dataUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/> :
                 <div style={{ display:"flex",alignItems:"center",justifyContent:"center",height:"100%" }}><FileText size={16} color={C.textMuted}/></div>}
               <button onClick={() => rm(type,item.id)}
                 style={{ position:"absolute",top:4,right:4,width:20,height:20,borderRadius:"50%",background:"rgba(0,0,0,.7)",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
@@ -938,9 +824,9 @@ function AssetUpload({ activeBrand, assets, setAssets, showToast }) {
   );
 
   return (
-    <div style={{ padding:28,maxWidth:880,margin:"0 auto" }}>
-      <div style={{ marginBottom:20 }}>
-        <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>Asset Library</h2>
+    <div style={{ padding:isMobile?"16px":"28px",maxWidth:880,margin:"0 auto" }}>
+      <div style={{ marginBottom:16 }}>
+        <h2 style={{ fontSize:isMobile?18:20,fontWeight:700,color:C.text,margin:0 }}>Asset Library</h2>
         <p style={{ fontSize:12,color:C.textSec,marginTop:4 }}>Brand: <span style={{ color:C.red }}>{activeBrand.companyName}</span> · Files cached in browser IndexedDB — persist across sessions</p>
       </div>
 
@@ -950,8 +836,8 @@ function AssetUpload({ activeBrand, assets, setAssets, showToast }) {
         <span>All uploaded images are cached in your browser (IndexedDB). They load instantly next time without re-uploading. Reference images are automatically included in every AI generation request.</span>
       </div>
 
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14 }}>
-        <Box title="Company Logo" type="logo" Icon={ImageIcon} color={C.red} hint="Used in brand overlay mode" accept="image/*"/>
+      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12 }}>
+        <Box title="Company Logo" type="logo" Icon={ImageIcon} color={C.red} hint="Brand logo — stored on server for reference" accept="image/*"/>
         <Box title="Project Images" type="images" Icon={FolderOpen} color={C.blue} hint="Property photos, renders — sent to AI as style reference" accept="image/*" multi/>
         <Box title="Reference Posters" type="posters" Icon={Star} color="#ab47bc" hint="Sample designs — AI learns typography and layout from these" accept="image/*" multi/>
         <Box title="Documents" type="docs" Icon={FileText} color={C.green} hint="Brochures, pricing sheets" accept=".pdf,.docx,.txt" multi/>
@@ -964,18 +850,15 @@ function AssetUpload({ activeBrand, assets, setAssets, showToast }) {
 // PROMPT STUDIO
 // ─────────────────────────────────────────────────────────────
 
-function PromptStudio({ activeBrand, assets, openAIKey, imageModel, enhanceModel, history, setHistory, setPreview, setTab, showToast }) {
+function PromptStudio({ activeBrand, assets, apiKeySet, imageModel, enhanceModel, history, setHistory, setPreview, setTab, showToast }) {
+  const isMobile = useIsMobile();
   const [prompt,     setPrompt]     = useState("");
   const [campaign,   setCampaign]   = useState("auto");
   const [ratio,      setRatio]      = useState("1:1");
-  const [mode,       setMode]       = useState("ai");
-  const [logoPos,    setLogoPos]    = useState("top-right");
   const [enhanced,   setEnhanced]   = useState("");
   const [showEnh,    setShowEnh]    = useState(false);
   const [generating, setGenerating] = useState(false);
   const [logs,       setLogs]       = useState([]);
-
-  useEffect(() => { if (activeBrand?.logoPlacement) setLogoPos(activeBrand.logoPlacement); }, [activeBrand]);
 
   if (!activeBrand) return (
     <div style={{ padding:28,textAlign:"center",paddingTop:80 }}>
@@ -986,120 +869,66 @@ function PromptStudio({ activeBrand, assets, openAIKey, imageModel, enhanceModel
 
   const addLog = (msg, type="info") => setLogs(l => [...l, { msg, type, time: new Date().toLocaleTimeString() }]);
 
-  const buildSysPrompt = (refCount) => {
-    const b = activeBrand;
-    const refNote = refCount > 0
-      ? `\n\nYou have access to ${refCount} reference poster image(s) from this brand. Study them carefully for: layout style, typography aesthetic, color usage, visual mood, and composition. Replicate this design language.`
-      : "";
-
-    return `You are a world-class marketing creative director and AI image prompt engineer for ${b.brandType||"real estate"}.
-
-Brand: ${b.companyName||"Brand"}
-Type: ${b.brandType||"Premium Real Estate"}
-Colors: ${b.primaryColor||"#e53935"} / ${b.secondaryColor||"#1a1a1a"}
-Style: ${b.designStyle||"luxury minimal"}
-Tone: ${b.tone||"premium, aspirational"}
-Tagline: ${b.tagline||""}
-AI Instructions: ${b.aiInstructions||"none"}
-Restrictions: ${b.restrictions||"none"}${refNote}
-
-Generate a MASTERFUL image generation prompt.
-
-MANDATORY REQUIREMENTS — EVERY IMAGE MUST HAVE:
-1. BEAUTIFUL CREATIVE TEXT integrated into the design (campaign headline, dates, taglines etc.)
-   Example: "Happy New Year 2025" in gold foil, "Grand Launch" in bold serif, "Eid Mubarak" in Arabic-inspired script
-   Text must look DESIGNED — artistic, large, perfectly placed, visually stunning
-2. A CLEAN BRIGHT EMPTY RECTANGULAR SPACE (approx 130x130px) at ${logoPos} corner of the image
-   This space MUST be: bright white, very light gray, or a soft glow — completely empty, no patterns, no text
-   Explicitly describe: "clean bright white empty space in the ${logoPos} for logo placement"
-3. ZERO logos, brand marks, watermarks, or emblems anywhere else in the image
-4. Premium cinematic composition: dramatic lighting, bokeh, depth, luxurious materials
-5. Colors complementing ${b.primaryColor||"#e53935"}
-
-Return ONLY JSON:
-{"campaignType":"festival|new_year|property_launch|offer|site_visit|possession|milestone|brand_awareness|testimonial|project_highlight|construction_update","enhancedPrompt":"...","aspectRatio":"1:1 or 4:5 or 9:16 or 16:9","reasoning":"brief"}`;
-  };
 
   const generate = async () => {
     if (!prompt.trim()) { showToast("Enter a prompt","error"); return; }
-    if (!openAIKey)     { showToast("Add OpenAI API key in Settings","error"); return; }
+    if (!apiKeySet)     { showToast("Add your OpenAI API key in Settings first","error"); return; }
     setGenerating(true); setLogs([]); setShowEnh(false);
     try {
-      // Collect cached reference images (posters + project images)
-      const refImgs = [];
-      for (const p of (assets.posters||[]).slice(0,2)) {
-        const cached = p.dataUrl || await getCachedAsset(activeBrand.id, p.id);
-        if (cached) refImgs.push(cached);
-      }
-      for (const img of (assets.images||[]).slice(0,2)) {
-        const cached = img.dataUrl || await getCachedAsset(activeBrand.id, img.id);
-        if (cached && refImgs.length < 3) refImgs.push(cached);
-      }
+      addLog(`Sending to server — brand details + cached reference images included...`);
 
-      addLog(`Enhancing with ${enhanceModel} — ${refImgs.length} reference image(s) loaded from cache...`);
+      // All generation happens on the backend:
+      // - API key is read from server DB
+      // - Reference images are read from server DB (cached on upload)
+      // - No browser data needed
+      const res = await api("/api/generate", {
+        method: "POST",
+        body: JSON.stringify({
+          brandId:      activeBrand.id,
+          prompt,
+          campaignType: campaign,
+          aspectRatio:  ratio,
+          imageModel,
+          enhanceModel,
+        }),
+      });
 
-      // Build message with vision if we have ref images
-      let gptResponse;
-      if (refImgs.length > 0 && (enhanceModel==="gpt-4o"||enhanceModel==="gpt-4-turbo")) {
-        // Use vision endpoint with cached images
-        const res = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type":"application/json", Authorization:`Bearer ${openAIKey}` },
-          body: JSON.stringify({
-            model: enhanceModel, max_tokens:1000, temperature:0.75,
-            messages: [{
-              role: "system", content: buildSysPrompt(refImgs.length)
-            },{
-              role: "user",
-              content: [
-                { type:"text", text:`User prompt: "${prompt}". Campaign: ${campaign}. Preferred ratio: ${ratio}. Logo position: ${logoPos}.` },
-                ...refImgs.map(url => ({ type:"image_url", image_url:{ url, detail:"low" } }))
-              ]
-            }]
-          })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error?.message||"GPT error");
-        gptResponse = data.choices[0].message.content;
-      } else {
-        gptResponse = await enhanceWithGPT(buildSysPrompt(0),
-          `User prompt: "${prompt}". Campaign: ${campaign}. Preferred ratio: ${ratio}. Logo position: ${logoPos}.`,
-          openAIKey, enhanceModel);
-      }
+      if (!res.success) throw new Error(res.error || "Generation failed");
 
-      let parsed;
-      try { parsed = JSON.parse(gptResponse.replace(/```json|```/g,"").trim()); }
-      catch { parsed = { campaignType: campaign==="auto"?"brand_awareness":campaign, enhancedPrompt:prompt, aspectRatio:ratio, reasoning:"" }; }
+      addLog(`✓ Campaign: ${res.campaignType}`, "success");
+      addLog(`✓ Ratio: ${res.aspectRatio} · Model: ${res.imageModel}`, "success");
+      if (res.refImagesUsed > 0) addLog(`✓ ${res.refImagesUsed} reference image(s) used from cache`, "success");
+      addLog("✓ Image generated and saved on server!", "success");
 
-      const finalCampaign = parsed.campaignType || campaign;
-      const finalPrompt   = parsed.enhancedPrompt || prompt;
-      const finalRatio    = parsed.aspectRatio || ratio;
+      setEnhanced(res.enhancedPrompt || "");
+      setShowEnh(true);
 
-      setEnhanced(finalPrompt); setShowEnh(true);
-      addLog(`✓ Campaign: ${finalCampaign}`, "success");
-      addLog(`✓ Size: ${getImageSize(finalRatio, imageModel)} (${finalRatio})`, "success");
-      addLog(`Generating with ${imageModel}...`);
-
-      const size   = getImageSize(finalRatio, imageModel);
-      const imgUrl = await generateImageFrontend(finalPrompt, size, openAIKey, imageModel);
-      addLog("✓ Image generated!", "success");
-
-      let finalImg = imgUrl;
-      if (mode==="overlay" && assets.logo) {
-        addLog("Applying logo overlay...");
-        finalImg = await applyLogoOverlay(imgUrl, activeBrand, assets.logo.dataUrl||assets.logo.url, logoPos);
-        addLog("✓ Logo overlay applied!", "success");
-      }
+      // Fetch the generated image as a data URL for preview
+      addLog("Loading preview...");
+      let imageDataUrl = res.imageUrl;
+      try {
+        const imgRes = await fetch(res.imageUrl);
+        const blob   = await imgRes.blob();
+        imageDataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = e => r(e.target.result); fr.readAsDataURL(blob); });
+      } catch { /* use URL directly if fetch fails */ }
 
       const gen = {
-        id: uid(), brandId: activeBrand.id, prompt, enhancedPrompt: finalPrompt,
-        campaignType: finalCampaign, aspectRatio: finalRatio, mode, imageDataUrl: finalImg,
-        createdAt: new Date().toISOString(), reasoning: parsed.reasoning||"", logoPos,
+        id:            res.id,
+        brandId:       activeBrand.id,
+        prompt,
+        enhancedPrompt: res.enhancedPrompt || "",
+        campaignType:  res.campaignType,
+        aspectRatio:   res.aspectRatio,
+        headline:      res.headline || "",
+        imageDataUrl,
+        imageUrl:      res.imageUrl,
+        createdAt:     res.createdAt,
+        reasoning:     res.reasoning || "",
       };
       setHistory(h => [gen,...h]);
       setPreview(gen);
-      addLog("Saved to history", "success");
-      setTimeout(() => setTab("preview"), 500);
+      addLog("Done!", "success");
+      setTimeout(() => setTab("preview"), 400);
     } catch(e) {
       addLog(`Error: ${e.message}`, "error");
       showToast(e.message, "error");
@@ -1108,16 +937,16 @@ Return ONLY JSON:
   };
 
   return (
-    <div style={{ padding:28,maxWidth:940,margin:"0 auto" }}>
-      <div style={{ marginBottom:20 }}>
-        <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>Prompt Studio</h2>
+    <div style={{ padding:isMobile?"16px":"28px",maxWidth:940,margin:"0 auto" }}>
+      <div style={{ marginBottom:16 }}>
+        <h2 style={{ fontSize:isMobile?18:20,fontWeight:700,color:C.text,margin:0 }}>Prompt Studio</h2>
         <p style={{ fontSize:12,color:C.textSec,marginTop:4 }}>
           Brand: <span style={{ color:C.red }}>{activeBrand.companyName}</span>
-          {(assets.posters||[]).length>0 && <> · <span style={{ color:C.green }}>{(assets.posters||[]).length} reference poster(s) cached</span></>}
+          <span style={{ color:C.textMuted }}> · AI generates full poster — brand name, phone, website, headline all rendered in image</span>
         </p>
       </div>
 
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 268px",gap:16 }}>
+      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 268px",gap:14 }}>
         <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
           <CP>
             <Lbl>Your Prompt</Lbl>
@@ -1140,35 +969,13 @@ Return ONLY JSON:
                     style={{ padding:"7px",background:ratio===r.value?C.redD:C.input,border:`1px solid ${ratio===r.value?C.red:C.border}`,borderRadius:7,cursor:"pointer",transition:"all .12s",textAlign:"center" }}>
                     <div style={{ fontSize:12,fontWeight:700,color:ratio===r.value?C.red:C.text }}>{r.value}</div>
                     <div style={{ fontSize:10,color:C.textMuted,marginTop:2 }}>{r.desc}</div>
-                    <div style={{ fontSize:9,color:C.textMuted }}>{getImageSize(r.value,imageModel)}</div>
+                    <div style={{ fontSize:9,color:ratio===r.value?C.red:C.textMuted,marginTop:1,fontFamily:"monospace" }}>{getImageSize(r.value,imageModel)}</div>
                   </button>
                 ))}
               </div>
             </CP>
           </div>
 
-          <CP>
-            <Lbl>Generation Mode</Lbl>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
-              <RCard selected={mode==="ai"} onClick={() => setMode("ai")} label="AI Full Control" desc="AI generates complete image. Creative text + empty logo zone included in the composition."/>
-              <RCard selected={mode==="overlay"} onClick={() => setMode("overlay")} label="Logo Overlay" desc="AI generates base visual, then your logo is programmatically placed at selected position."/>
-            </div>
-          </CP>
-
-          {mode==="overlay" && (
-            <CP>
-              <Lbl>Logo Position (applies to overlay)</Lbl>
-              <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6 }}>
-                {["top-left","top-center","top-right","bottom-left","bottom-center","bottom-right"].map(p => (
-                  <button key={p} onClick={() => setLogoPos(p)}
-                    style={{ padding:"8px",background:logoPos===p?C.redD:C.input,border:`1px solid ${logoPos===p?C.red:C.border}`,borderRadius:7,fontSize:11,color:logoPos===p?C.red:C.textMuted,cursor:"pointer" }}>
-                    {p.replace("-"," ")}
-                  </button>
-                ))}
-              </div>
-              <p style={{ fontSize:11,color:C.textMuted,marginTop:7 }}>AI will also leave a bright empty zone here (matching your selection) in the generated image</p>
-            </CP>
-          )}
 
           {showEnh && enhanced && (
             <CP style={{ border:`1px solid ${C.redB}`,background:C.redD }}>
@@ -1183,11 +990,11 @@ Return ONLY JSON:
             </CP>
           )}
 
-          <Btn onClick={generate} loading={generating} disabled={!prompt.trim()||!openAIKey} full style={{ padding:"12px" }}>
+          <Btn onClick={generate} loading={generating} disabled={!prompt.trim()||!apiKeySet} full style={{ padding:"12px" }}>
             {generating ? "Generating…" : <><Play size={15}/>Generate Poster</>}
           </Btn>
 
-          {!openAIKey && (
+          {!apiKeySet && (
             <div style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:C.redD,border:`1px solid ${C.redB}`,borderRadius:8,fontSize:12,color:C.red }}>
               <AlertCircle size={13}/>Add your OpenAI API key in Settings
             </div>
@@ -1226,9 +1033,9 @@ Return ONLY JSON:
           )}
 
           <CP>
-            <Lbl>Cached Assets</Lbl>
+            <Lbl>Server Assets</Lbl>
             {[
-              { label:"Logo",     ok:!!assets.logo,               val:assets.logo?"✓ Cached":"-" },
+              { label:"Logo",      ok:!!assets.logo,                val:assets.logo?"✓ On server":"-" },
               { label:"Ref images",ok:(assets.images||[]).length>0,val:`${(assets.images||[]).length} cached` },
               { label:"Ref posters",ok:(assets.posters||[]).length>0,val:`${(assets.posters||[]).length} cached` },
             ].map(({ label,ok,val }) => (
@@ -1249,11 +1056,8 @@ Return ONLY JSON:
 // ─────────────────────────────────────────────────────────────
 
 function PreviewSection({ item, activeBrand, assets, history, setHistory, showToast }) {
-  const [applying,setApplying] = useState(false);
-  const [logoPos, setLogoPos]  = useState("top-right");
-  const [copied,  setCopied]   = useState(false);
-
-  useEffect(() => { if (item?.logoPos) setLogoPos(item.logoPos); else if (activeBrand?.logoPlacement) setLogoPos(activeBrand.logoPlacement); }, [item, activeBrand]);
+  const [copied, setCopied] = useState(false);
+  const isMobile = useIsMobile();
 
   if (!item) return (
     <div style={{ display:"flex",alignItems:"center",justifyContent:"center",padding:28,height:"80vh" }}>
@@ -1269,25 +1073,14 @@ function PreviewSection({ item, activeBrand, assets, history, setHistory, showTo
     showToast("Downloaded!","success");
   };
 
-  const applyLogo = async () => {
-    if (!assets.logo) { showToast("No logo uploaded in Assets","error"); return; }
-    setApplying(true);
-    try {
-      const out = await applyLogoOverlay(item.imageDataUrl, activeBrand, assets.logo.dataUrl||assets.logo.url, logoPos);
-      const upd = { ...item, imageDataUrl:out, mode:"overlay", logoPos };
-      setHistory(h => h.map(g => g.id===item.id ? upd : g));
-      showToast("Logo placed!","success");
-    } catch { showToast("Overlay failed","error"); }
-    setApplying(false);
-  };
 
   const arStyle = item.aspectRatio==="16:9"?"16/9":item.aspectRatio==="9:16"?"9/16":"1/1";
 
   return (
-    <div style={{ padding:28,maxWidth:980,margin:"0 auto" }}>
-      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20 }}>
+    <div style={{ padding:isMobile?"12px":"28px",maxWidth:980,margin:"0 auto" }}>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8 }}>
         <div>
-          <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>Preview</h2>
+          <h2 style={{ fontSize:isMobile?17:20,fontWeight:700,color:C.text,margin:0 }}>Preview</h2>
           <p style={{ fontSize:12,color:C.textSec,marginTop:4 }}>{fmtDate(item.createdAt)}</p>
         </div>
         <div style={{ display:"flex",gap:8 }}>
@@ -1298,7 +1091,7 @@ function PreviewSection({ item, activeBrand, assets, history, setHistory, showTo
         </div>
       </div>
 
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 300px",gap:16 }}>
+      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 300px",gap:14 }}>
         <Card style={{ padding:8,background:"#060606" }}>
           <div style={{ position:"relative",background:"#111",borderRadius:8,overflow:"hidden",aspectRatio:arStyle,maxHeight:"72vh" }}>
             <img src={item.imageDataUrl} alt="Generated poster" style={{ width:"100%",height:"100%",objectFit:"contain" }}/>
@@ -1309,10 +1102,10 @@ function PreviewSection({ item, activeBrand, assets, history, setHistory, showTo
           <CP>
             <span style={{ fontSize:11,fontWeight:600,color:C.textMuted,display:"block",marginBottom:12,textTransform:"uppercase",letterSpacing:".07em" }}>Details</span>
             {[
-              { label:"Campaign", val: <Badge>{item.campaignType.replace(/_/g," ")}</Badge> },
+              { label:"Campaign", val: <Badge>{(item.campaignType||"").replace(/_/g," ")}</Badge> },
+              { label:"Headline", val: item.headline || "—" },
               { label:"Ratio",    val: item.aspectRatio },
-              { label:"Size",     val: getImageSize(item.aspectRatio,"gpt-image-1") },
-              { label:"Mode",     val: item.mode==="overlay"?"Logo Overlay":"AI Full Control" },
+              { label:"Model",    val: item.imageModel || "gpt-image-1" },
             ].map(({ label,val }) => (
               <div key={label} style={{ marginBottom:10 }}>
                 <span style={{ fontSize:11,color:C.textMuted }}>{label}</span>
@@ -1325,23 +1118,6 @@ function PreviewSection({ item, activeBrand, assets, history, setHistory, showTo
             </div>
           </CP>
 
-          {/* Manual logo placement */}
-          <CP>
-            <Lbl>Place Logo Manually</Lbl>
-            <p style={{ fontSize:11,color:C.textMuted,marginBottom:10,lineHeight:1.5 }}>
-              The AI left a bright empty space for the logo. Select position and click to overlay.
-            </p>
-            <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:5,marginBottom:10 }}>
-              {["top-left","top-center","top-right","bottom-left","bottom-center","bottom-right"].map(p => (
-                <button key={p} onClick={() => setLogoPos(p)}
-                  style={{ padding:"6px 4px",background:logoPos===p?C.redD:C.input,border:`1px solid ${logoPos===p?C.red:C.border}`,borderRadius:6,fontSize:10,color:logoPos===p?C.red:C.textMuted,cursor:"pointer" }}>
-                  {p.replace("-"," ")}
-                </button>
-              ))}
-            </div>
-            <Btn onClick={applyLogo} loading={applying} full size="sm"><Layers size={13}/>Place Logo at {logoPos.replace("-"," ")}</Btn>
-            {!assets.logo && <p style={{ fontSize:11,color:C.red,marginTop:6 }}>Upload logo in Assets first</p>}
-          </CP>
 
           <Btn onClick={download} full style={{ padding:"11px" }}><Download size={14}/>Download</Btn>
         </div>
@@ -1356,6 +1132,7 @@ function PreviewSection({ item, activeBrand, assets, history, setHistory, showTo
 
 function HistorySection({ history, activeBrand, setPreview, setTab, setHistory, showToast }) {
   const [filter, setFilter] = useState("all");
+  const isMobile = useIsMobile();
   const filtered = history.filter(h => (!activeBrand||h.brandId===activeBrand?.id) && (filter==="all"||h.campaignType===filter));
   const types    = [...new Set(history.filter(h=>!activeBrand||h.brandId===activeBrand?.id).map(h=>h.campaignType))];
 
@@ -1365,10 +1142,10 @@ function HistorySection({ history, activeBrand, setPreview, setTab, setHistory, 
   };
 
   return (
-    <div style={{ padding:28,maxWidth:980,margin:"0 auto" }}>
-      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20 }}>
+    <div style={{ padding:isMobile?"16px":"28px",maxWidth:980,margin:"0 auto" }}>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
         <div>
-          <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>History</h2>
+          <h2 style={{ fontSize:isMobile?18:20,fontWeight:700,color:C.text,margin:0 }}>History</h2>
           <p style={{ fontSize:12,color:C.textSec,marginTop:4 }}>{filtered.length} posters{activeBrand?` · ${activeBrand.companyName}`:""}</p>
         </div>
         {filtered.length>0 && <Btn variant="danger" size="sm" onClick={() => { if(confirm("Clear all?")) setHistory([]); }}><Trash2 size={13}/>Clear</Btn>}
@@ -1389,19 +1166,20 @@ function HistorySection({ history, activeBrand, setPreview, setTab, setHistory, 
               </button>
             ))}
           </div>
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12 }}>
+          <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10 }}>
             {filtered.map(item => (
               <Card key={item.id} style={{ overflow:"hidden" }}>
                 <div style={{ position:"relative",aspectRatio:"1",background:"#111",cursor:"pointer" }}
                   onClick={() => { setPreview(item); setTab("preview"); }}>
                   <img src={item.imageDataUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
-                  {item.mode==="overlay" && <div style={{ position:"absolute",top:6,left:6 }}><Badge color="green">Logo On</Badge></div>}
+
                 </div>
                 <div style={{ padding:"10px 12px" }}>
                   <div style={{ display:"flex",gap:5,marginBottom:6,flexWrap:"wrap" }}>
-                    <Badge>{item.campaignType.replace(/_/g," ")}</Badge>
+                    <Badge>{(item.campaignType||"").replace(/_/g," ")}</Badge>
                     <Badge color="gray">{item.aspectRatio}</Badge>
                   </div>
+                  {item.headline && <p style={{ fontSize:10,color:C.red,marginBottom:4,fontWeight:600 }}>{item.headline}</p>}
                   <p style={{ fontSize:11,color:C.textSec,marginBottom:8,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" }}>{item.prompt}</p>
                   <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
                     <span style={{ fontSize:10,color:C.textMuted }}>{fmtDate(item.createdAt)}</span>
@@ -1424,10 +1202,11 @@ function HistorySection({ history, activeBrand, setPreview, setTab, setHistory, 
 // WEBHOOK
 // ─────────────────────────────────────────────────────────────
 
-function WebhookPage({ openAIKey, imageModel, enhanceModel, showToast }) {
+function WebhookPage({ apiKeySet, imageModel, enhanceModel, showToast }) {
+  const isMobile = useIsMobile();
   const async_ = `${BACKEND}/webhook/generate`;
   const sync_  = `${BACKEND}/webhook/generate/sync`;
-  const [payload, setPayload] = useState(JSON.stringify({ requestId:"req_001",brandId:"brand_001",campaignType:"new_year",prompt:"Create a premium New Year post",aspectRatio:"1:1",mode:"overlay",callbackUrl:"https://n8n.yoursite.com/cb" },null,2));
+  const [payload, setPayload] = useState(JSON.stringify({ requestId:"req_001",brandId:"brand_001",campaignType:"new_year",prompt:"Create a premium New Year post",aspectRatio:"1:1",callbackUrl:"https://n8n.yoursite.com/cb" },null,2));
   const [logs,    setLogs]    = useState([]);
   const [simming, setSimming] = useState(false);
   const [cp,      setCp]      = useState({});
@@ -1435,18 +1214,19 @@ function WebhookPage({ openAIKey, imageModel, enhanceModel, showToast }) {
   const copy = (txt,k) => { navigator.clipboard.writeText(txt); setCp(p=>({...p,[k]:true})); setTimeout(()=>setCp(p=>({...p,[k]:false})),2000); };
 
   const simulate = async () => {
-    if (!openAIKey) { showToast("Add OpenAI key in Settings","error"); return; }
+    if (!apiKeySet) { showToast("Add OpenAI key in Settings first","error"); return; }
     setSimming(true);
     const entry = { id:uid(), ts:new Date().toISOString(), status:"processing" };
     setLogs(l=>[entry,...l]);
     try {
       const p = JSON.parse(payload);
-      const raw = await enhanceWithGPT(
-        `You are a prompt enhancer. Return ONLY JSON: {"enhancedPrompt":"...","size":"1024x1024"}`,
-        `Enhance: "${p.prompt}"`, openAIKey, enhanceModel
-      );
-      let ep; try { ep=JSON.parse(raw.replace(/```json|```/g,"").trim()); } catch { ep={enhancedPrompt:p.prompt,size:"1024x1024"}; }
-      await generateImageFrontend(ep.enhancedPrompt, getImageSize(p.aspectRatio||"1:1",imageModel), openAIKey, imageModel);
+      // Backend handles generation — API key is on server
+      const res = await api("/api/generate", { method:"POST", body:JSON.stringify({
+        brandId: p.brandId, prompt: p.prompt,
+        campaignType: p.campaignType || "auto",
+        aspectRatio: p.aspectRatio || "1:1",
+      })});
+      if (!res.success) throw new Error(res.error || "Generation failed");
       const result = { success:true,generationId:`gen_${uid()}`,imageUrl:`${BACKEND}/public/generated/example.png`,createdAt:new Date().toISOString() };
       setLogs(l=>l.map(lg=>lg.id===entry.id?{...lg,status:"success",result}:lg));
       showToast("Simulation successful!","success");
@@ -1470,9 +1250,9 @@ function WebhookPage({ openAIKey, imageModel, enhanceModel, showToast }) {
   );
 
   return (
-    <div style={{ padding:28,maxWidth:820,margin:"0 auto" }}>
-      <div style={{ marginBottom:20 }}>
-        <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>Webhook Integration</h2>
+    <div style={{ padding:isMobile?"16px":"28px",maxWidth:820,margin:"0 auto" }}>
+      <div style={{ marginBottom:16 }}>
+        <h2 style={{ fontSize:isMobile?18:20,fontWeight:700,color:C.text,margin:0 }}>Webhook Integration</h2>
         <p style={{ fontSize:12,color:C.textSec,marginTop:4 }}>n8n · Zapier · Make · Any automation tool</p>
       </div>
 
@@ -1485,11 +1265,11 @@ function WebhookPage({ openAIKey, imageModel, enhanceModel, showToast }) {
         <EndpointRow label="Sync (waits ~25s — returns full result directly)" url={sync_} k="sync" color="#42a5f5"/>
       </CP>
 
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14 }}>
+      <div style={{ display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12,marginBottom:14 }}>
         <CP>
           <Lbl>Input</Lbl>
           <div style={{ background:"#060606",border:`1px solid ${C.border}`,borderRadius:7,padding:12,fontFamily:"monospace",fontSize:11,color:C.green,maxHeight:200,overflow:"auto" }}>
-            <pre>{JSON.stringify({requestId:"req_001",brandId:"brand_001",campaignType:"new_year|festival|...",prompt:"Create a New Year post",aspectRatio:"1:1|4:5|9:16|16:9",mode:"ai|overlay",callbackUrl:"https://n8n.yoursite.com/cb"},null,2)}</pre>
+            <pre>{JSON.stringify({requestId:"req_001",brandId:"brand_001",campaignType:"new_year|festival|...",prompt:"Create a New Year post",aspectRatio:"1:1|4:5|9:16|16:9",callbackUrl:"https://n8n.yoursite.com/cb"},null,2)}</pre>
           </div>
         </CP>
         <CP>
@@ -1507,7 +1287,7 @@ function WebhookPage({ openAIKey, imageModel, enhanceModel, showToast }) {
         </div>
         <div style={{ marginBottom:12 }}><Lbl>Test Payload</Lbl><Txta value={payload} onChange={setPayload} rows={7} mono/></div>
         <Btn onClick={simulate} loading={simming}><Play size={13}/>Run Simulation</Btn>
-        {!openAIKey && <p style={{ fontSize:11,color:C.red,marginTop:8 }}>⚠ Add OpenAI key in Settings first</p>}
+        {!apiKeySet && <p style={{ fontSize:11,color:C.red,marginTop:8 }}>⚠ Add OpenAI key in Settings first</p>}
       </CP>
 
       {logs.length>0 && (
@@ -1536,34 +1316,49 @@ function WebhookPage({ openAIKey, imageModel, enhanceModel, showToast }) {
 // SETTINGS
 // ─────────────────────────────────────────────────────────────
 
-function SettingsPage({ openAIKey, setOpenAIKey, imageModel, setImageModel, enhanceModel, setEnhanceModel, showToast }) {
-  const [keyLocal,    setKeyLocal]    = useState(openAIKey);
+function SettingsPage({ apiKeySet, setApiKeySet, apiKeyMasked, setApiKeyMasked, imageModel, setImageModel, enhanceModel, setEnhanceModel, showToast }) {
+  const isMobile = useIsMobile();
+  const [keyLocal,    setKeyLocal]    = useState("");
   const [showKey,     setShowKey]     = useState(false);
+  const [saving,      setSaving]      = useState(false);
   const [testing,     setTesting]     = useState(false);
-  const [customModel, setCustomModel] = useState(() => localStorage.getItem("sparkos_custom_model") || "");
+  const [customModel, setCustomModel] = useState("");
   const [curPwd,     setCurPwd]     = useState("");
   const [newPwd,     setNewPwd]     = useState("");
   const [confPwd,    setConfPwd]    = useState("");
   const [changingPwd,setChangingPwd]= useState(false);
 
-  const saveKey = () => {
-    setOpenAIKey(keyLocal);
-    localStorage.setItem("sparkos_openai_key", keyLocal);
-    showToast("API key saved & persisted!","success");
+  const saveKey = async () => {
+    if (!keyLocal.trim()) { showToast("Enter your API key","error"); return; }
+    setSaving(true);
+    try {
+      const res = await api("/api/settings", { method:"POST", body: JSON.stringify({ openaiKey: keyLocal }) });
+      if (res.success) {
+        setApiKeySet(true);
+        setApiKeyMasked(keyLocal.slice(0,7)+"••••••••••••••••"+keyLocal.slice(-4));
+        setKeyLocal(""); // clear input after save
+        showToast("API key saved to server — available on all devices!","success");
+      }
+    } catch(e) { showToast(e.message,"error"); }
+    setSaving(false);
   };
 
   const testKey = async () => {
-    if (!keyLocal) { showToast("Enter a key first","error"); return; }
+    if (!keyLocal.trim()) { showToast("Enter a key to test","error"); return; }
     setTesting(true);
     try {
-      const r = await fetch("https://api.openai.com/v1/models",{ headers:{ Authorization:`Bearer ${keyLocal}` } });
-      if (r.ok) showToast("✓ API key valid!","success");
-      else      showToast("Invalid API key","error");
-    } catch { showToast("Connection failed","error"); }
+      const res = await api("/api/settings/test-key", { method:"POST", body: JSON.stringify({ openaiKey: keyLocal }) });
+      if (res.success) showToast("✓ API key is valid!","success");
+      else showToast("Invalid key: " + res.error,"error");
+    } catch(e) { showToast(e.message,"error"); }
     setTesting(false);
   };
 
-  const saveModel = (lsKey, val, setter) => { setter(val); localStorage.setItem(lsKey, val); };
+  const saveModel = async (field, val, setter) => {
+    setter(val);
+    try { await api("/api/settings", { method:"POST", body: JSON.stringify({ [field]: val }) }); }
+    catch(e) { console.warn("Model save failed:", e.message); }
+  };
 
   const changePwd = async () => {
     if (!newPwd)         { showToast("Enter new password","error"); return; }
@@ -1586,9 +1381,9 @@ function SettingsPage({ openAIKey, setOpenAIKey, imageModel, setImageModel, enha
   );
 
   return (
-    <div style={{ padding:28,maxWidth:660,margin:"0 auto" }}>
-      <div style={{ marginBottom:24 }}>
-        <h2 style={{ fontSize:20,fontWeight:700,color:C.text,margin:0 }}>Settings</h2>
+    <div style={{ padding:isMobile?"16px":"28px",maxWidth:660,margin:"0 auto" }}>
+      <div style={{ marginBottom:20 }}>
+        <h2 style={{ fontSize:isMobile?18:20,fontWeight:700,color:C.text,margin:0 }}>Settings</h2>
         <p style={{ fontSize:12,color:C.textSec,marginTop:4 }}>API key · Models · Security</p>
       </div>
 
@@ -1597,8 +1392,20 @@ function SettingsPage({ openAIKey, setOpenAIKey, imageModel, setImageModel, enha
           <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:14 }}>
             <Key size={15} color={C.red}/>
             <span style={{ fontSize:13,fontWeight:600,color:C.text }}>OpenAI API Key</span>
-            {openAIKey && <Badge color="green">Active</Badge>}
+            {apiKeySet && <Badge color="green">Active</Badge>}
           </div>
+          {/* Current key status */}
+          {apiKeySet && apiKeyMasked && (
+            <div style={{ padding:"10px 14px",background:C.greenD,border:`1px solid ${C.greenB}`,borderRadius:8,marginBottom:12,display:"flex",alignItems:"center",gap:8 }}>
+              <CheckCircle2 size={14} color={C.green}/>
+              <div>
+                <p style={{ fontSize:12,color:C.green,fontWeight:600 }}>API Key Active</p>
+                <p style={{ fontSize:11,color:C.textMuted,marginTop:2,fontFamily:"monospace" }}>{apiKeyMasked}</p>
+              </div>
+            </div>
+          )}
+          {/* New key input */}
+          <p style={{ fontSize:11,color:C.textMuted,marginBottom:8 }}>{apiKeySet?"Update key:":"Enter your key:"}</p>
           <div style={{ position:"relative",marginBottom:10 }}>
             <input type={showKey?"text":"password"} value={keyLocal} onChange={e=>setKeyLocal(e.target.value)}
               placeholder="sk-proj-..." style={{ ...SI.input,paddingRight:42 }}
@@ -1608,12 +1415,12 @@ function SettingsPage({ openAIKey, setOpenAIKey, imageModel, setImageModel, enha
             </button>
           </div>
           <div style={{ display:"flex",gap:8,marginBottom:14 }}>
-            <Btn onClick={saveKey} size="sm">Save Key</Btn>
-            <Btn variant="secondary" size="sm" onClick={testKey} loading={testing}>Test Connection</Btn>
+            <Btn onClick={saveKey} loading={saving} size="sm">Save to Server</Btn>
+            <Btn variant="secondary" size="sm" onClick={testKey} loading={testing}>Test Key</Btn>
           </div>
           <div style={{ padding:"10px 14px",background:C.greenD,border:`1px solid ${C.greenB}`,borderRadius:8 }}>
             <p style={{ fontSize:11,color:C.textSec,lineHeight:1.6 }}>
-              <span style={{ color:C.green,fontWeight:600 }}>Persistent:</span> Saved to localStorage — survives page reloads. Never sent to our server. Only sent directly to OpenAI.
+              <span style={{ color:C.green,fontWeight:600 }}>Server-stored:</span> Saved in your backend DB — available on every device, every session. Never stored in browser.
             </p>
           </div>
         </CP>
@@ -1622,7 +1429,7 @@ function SettingsPage({ openAIKey, setOpenAIKey, imageModel, setImageModel, enha
       <Section title="Image Generation Model">
         <CP style={{ display:"flex",flexDirection:"column",gap:8 }}>
           {IMAGE_MODELS.map(m => (
-            <RCard key={m.value} selected={imageModel===m.value} onClick={() => saveModel("sparkos_image_model",m.value,setImageModel)}
+            <RCard key={m.value} selected={imageModel===m.value} onClick={() => saveModel("imageModel",m.value,setImageModel)}
               label={m.label} desc={m.desc} badge={m.value==="gpt-image-1"?"Default":""}/>
           ))}
         </CP>
@@ -1631,7 +1438,7 @@ function SettingsPage({ openAIKey, setOpenAIKey, imageModel, setImageModel, enha
       <Section title="Prompt Enhancement Model">
         <CP style={{ display:"flex",flexDirection:"column",gap:8 }}>
           {ENHANCE_MODELS.map(m => (
-            <RCard key={m.value} selected={enhanceModel===m.value} onClick={() => saveModel("sparkos_enhance_model",m.value,setEnhanceModel)}
+            <RCard key={m.value} selected={enhanceModel===m.value} onClick={() => saveModel("enhanceModel",m.value,setEnhanceModel)}
               label={m.label} desc={m.desc} badge={m.value==="gpt-4o"?"Default":""}/>
           ))}
           <div style={{ padding:"10px 14px",background:"rgba(30,136,229,.08)",border:"1px solid rgba(30,136,229,.18)",borderRadius:8 }}>
@@ -1649,7 +1456,7 @@ function SettingsPage({ openAIKey, setOpenAIKey, imageModel, setImageModel, enha
           <Lbl>Custom Model Name</Lbl>
           <div style={{ display:"flex",gap:8 }}>
             <Inp value={customModel} onChange={setCustomModel} placeholder="e.g. gpt-image-1.5"/>
-            <Btn size="sm" onClick={() => { localStorage.setItem("sparkos_custom_model", customModel); showToast("Custom model saved!", "success"); }}>Save</Btn>
+            <Btn size="sm" onClick={async () => { await api("/api/settings",{method:"POST",body:JSON.stringify({imageModel:customModel})}); setImageModel(customModel); showToast("Custom model saved to server!", "success"); }}>Save</Btn>
           </div>
           {customModel && <p style={{ fontSize:11,color:C.green,marginTop:8 }}>✓ Will use: <strong>{customModel}</strong> when "Custom Model…" is selected</p>}
         </CP>
@@ -1687,10 +1494,11 @@ export default function SparkOs() {
   const [preview,      setPreview]      = useState(null);
   const [toast,        setToast]        = useState(null);
 
-  // Persistent keys from localStorage
-  const [openAIKey,    setOpenAIKey]    = useState(() => localStorage.getItem("sparkos_openai_key")||"");
-  const [imageModel,   setImageModel]   = useState(() => localStorage.getItem("sparkos_image_model")||"gpt-image-1");
-  const [enhanceModel, setEnhanceModel] = useState(() => localStorage.getItem("sparkos_enhance_model")||"gpt-4o");
+  // Settings loaded from server — persistent across all devices
+  const [apiKeySet,    setApiKeySet]    = useState(false);
+  const [apiKeyMasked, setApiKeyMasked] = useState("");
+  const [imageModel,   setImageModel]   = useState("gpt-image-1");
+  const [enhanceModel, setEnhanceModel] = useState("gpt-4o");
 
   const showToast = useCallback((msg, type="success") => setToast({ msg, type, id: uid() }), []);
 
@@ -1706,36 +1514,18 @@ export default function SparkOs() {
     }).catch(() => {});
   }, [loggedIn]);
 
-  // Load assets for active brand + restore from IndexedDB cache
+  // Load assets for active brand from server
   useEffect(() => {
     if (!activeBrand) return;
-    api(`/api/assets/${activeBrand.id}`).then(async res => {
+    api(`/api/assets/${activeBrand.id}`).then(res => {
       const a = res.assets || {};
-
-      // Restore logo
-      let logoData = null;
-      if (a.logo) {
-        const cached = await getCachedAsset(activeBrand.id, "logo");
-        logoData = { url: a.logoUrl, name: "logo", dataUrl: cached||null, fileId:"logo" };
-      }
-
-      // Restore images from IndexedDB cache
-      const restoreList = async (list) => {
-        const out = [];
-        for (const item of (list||[])) {
-          const cached = await getCachedAsset(activeBrand.id, item.id);
-          out.push({ ...item, dataUrl: cached||null });
-        }
-        return out;
-      };
-
-      const [images, posters, docs] = await Promise.all([
-        restoreList(a.images),
-        restoreList(a.posters),
-        Promise.resolve(a.docs||[]),
-      ]);
-
-      setAssets({ logo: logoData, images, posters, docs });
+      // Server stores base64 internally — frontend just shows url previews
+      setAssets({
+        logo:    a.logo ? { url: a.logoUrl||a.logo.url, name:"logo", dataUrl:null } : null,
+        images:  (a.images||[]).map(i => ({ ...i, dataUrl:null })),
+        posters: (a.posters||[]).map(i => ({ ...i, dataUrl:null })),
+        docs:    a.docs||[],
+      });
     }).catch(() => {});
   }, [activeBrand?.id]);
 
@@ -1748,12 +1538,14 @@ export default function SparkOs() {
     brands:    <BrandsManager brands={brands} activeBrand={activeBrand} setActiveBrand={setActiveBrand} setBrands={setBrands} setTab={setActiveTab} showToast={showToast}/>,
     brandedit: activeBrand ? <BrandEdit brand={activeBrand} brands={brands} setBrands={setBrands} setActiveBrand={setActiveBrand} showToast={showToast}/> : null,
     assets:    <AssetUpload activeBrand={activeBrand} assets={assets} setAssets={setAssets} showToast={showToast}/>,
-    studio:    <PromptStudio activeBrand={activeBrand} assets={assets} openAIKey={openAIKey} imageModel={imageModel} enhanceModel={enhanceModel} history={history} setHistory={setHistory} setPreview={setPreview} setTab={setActiveTab} showToast={showToast}/>,
+    studio:    <PromptStudio activeBrand={activeBrand} assets={assets} apiKeySet={apiKeySet} imageModel={imageModel} enhanceModel={enhanceModel} history={history} setHistory={setHistory} setPreview={setPreview} setTab={setActiveTab} showToast={showToast}/>,
     preview:   <PreviewSection item={preview||history[0]||null} activeBrand={activeBrand} assets={assets} history={history} setHistory={setHistory} showToast={showToast}/>,
     history:   <HistorySection history={history} activeBrand={activeBrand} setPreview={setPreview} setTab={setActiveTab} setHistory={setHistory} showToast={showToast}/>,
-    webhook:   <WebhookPage openAIKey={openAIKey} imageModel={imageModel} enhanceModel={enhanceModel} showToast={showToast}/>,
-    settings:  <SettingsPage openAIKey={openAIKey} setOpenAIKey={setOpenAIKey} imageModel={imageModel} setImageModel={setImageModel} enhanceModel={enhanceModel} setEnhanceModel={setEnhanceModel} showToast={showToast}/>,
+    webhook:   <WebhookPage apiKeySet={apiKeySet} imageModel={imageModel} enhanceModel={enhanceModel} showToast={showToast}/>,
+    settings:  <SettingsPage apiKeySet={apiKeySet} setApiKeySet={setApiKeySet} apiKeyMasked={apiKeyMasked} setApiKeyMasked={setApiKeyMasked} imageModel={imageModel} setImageModel={setImageModel} enhanceModel={enhanceModel} setEnhanceModel={setEnhanceModel} showToast={showToast}/>,
   };
+
+  const isMobile = useIsMobile();
 
   return (
     <div style={{ display:"flex",height:"100vh",background:C.bg,color:C.text,fontFamily:"'Inter',system-ui,sans-serif",overflow:"hidden" }}>
@@ -1767,6 +1559,8 @@ export default function SparkOs() {
         @keyframes spin{to{transform:rotate(360deg)}}
         input::placeholder,textarea::placeholder{color:#383838;font-family:inherit}
         button{font-family:inherit}
+        /* Mobile tap highlight */
+        button,a{-webkit-tap-highlight-color:transparent}
       `}</style>
 
       <Sidebar
@@ -1776,11 +1570,11 @@ export default function SparkOs() {
         activeBrand={activeBrand}
         setActiveBrand={(b) => { setActiveBrand(b); if(b) localStorage.setItem("ab",b.id); }}
         histLen={history.length}
-        hasKey={!!openAIKey}
+        hasKey={apiKeySet}
         onLogout={logout}
       />
 
-      <main style={{ flex:1,overflowY:"auto",background:C.bg }}>
+      <main style={{ flex:1,overflowY:"auto",background:C.bg,paddingBottom:isMobile?"70px":"0" }}>
         {tabs[activeTab] || tabs.dashboard}
       </main>
 
