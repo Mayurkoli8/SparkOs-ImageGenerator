@@ -12,7 +12,7 @@ import {
   LogOut, Pencil, Users, Shield, Info
 } from "lucide-react";
 
-}
+
 
 // ─────────────────────────────────────────────────────────────
 // API + OPENAI HELPERS
