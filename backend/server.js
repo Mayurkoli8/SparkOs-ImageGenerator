@@ -267,6 +267,21 @@ Return ONLY valid JSON (no markdown):
   }
 }
 
+// ── GET REFERENCE IMAGES ──────────────────────────────────────────────────
+function getRefImages(brandId, limit = 2) {
+  const db = readDB();
+  const brandAssets = db.assets?.[brandId];
+  if (!brandAssets || !brandAssets.images) return [];
+  
+  // Return base64 images (used by GPT vision), up to limit
+  const images = brandAssets.images
+    .filter(img => img.base64)
+    .slice(0, limit)
+    .map(img => ({ id: img.id, base64: img.base64, name: img.name }));
+  
+  return images;
+}
+
 // ── IMAGE GENERATION ───────────────────────────────────────────────────────
 async function generateImage(prompt, size, model) {
   const openai = new OpenAI({ apiKey: getApiKey() });
