@@ -165,6 +165,14 @@ function buildMasterPrompt(userPrompt, brand, campaignType, detectedHeadline, re
   else if (website)     bottomLines.push(website);
   const bottomBlock = bottomLines.join(" • ");
 
+  console.log("📝 BOTTOM BRAND BAR CONSTRUCTED:", {
+    companyName,
+    phone,
+    website,
+    tagline,
+    finalBottomBlock: bottomBlock,
+  });
+
   return `You are creating a ${brandType} marketing poster. This must look like it was designed by a world-class professional graphic designer for Instagram.
 
 ${refInstruction}
@@ -191,14 +199,15 @@ Render these text elements as part of the design — styled, positioned, beautif
 
 ③ BOTTOM BRAND BAR — at the very bottom of the image, clean dark or colored strip/band:
    "${bottomBlock}"
-   Style: Professional sans-serif, smaller size, clearly readable, white or light text on dark/colored background strip
+   Style: Professional sans-serif, smaller size, ULTRA-CRISP SHARP TEXT, white or light text on dark/colored background strip
+   CRITICAL: This text MUST be pixel-perfect sharp, high contrast, 100% legible — not blurry under any circumstances
 
 ━━━ COMPOSITION RULES ━━━
 - TOP-RIGHT ~15% of image: intentionally left clear — no text elements here, natural background only
 - Headline: Dominant, upper half or center, designed with the scene not just placed on top
-- Bottom brand strip: Full-width band at bottom, ~12% height, shows company name + phone + website
+- Bottom brand strip: Full-width band at bottom, ~12% height, shows company name + phone + website — TEXT MUST BE CRISP
 - Overall: magazine cover quality, dramatic depth, professional lighting, photorealistic or high-end illustration
-- Typography: letters must be CRISP, SHARP, READABLE — not blurry, not distorted
+- Typography: ALL TEXT must be CRISP, SHARP, READABLE — not blurry, not distorted, especially the bottom bar
 - Aspect ratio composition: fill the full frame, no empty space at edges
 
 ━━━ QUALITY STANDARD ━━━
@@ -223,7 +232,6 @@ Campaign types: festival, new_year, property_launch, offer, site_visit, possessi
 RULES for headline:
 - Be SPECIFIC: use names/numbers from user prompt (e.g. "Grand Launch — Skyline Residences", "Happy Diwali 2024", "20% Off This Weekend Only")
 - If year/festival/project name mentioned, include it
-- Keep under 6 words for main headline
 - Make it punchy, memorable, campaign-specific
 
 RULES for aspectRatio:
@@ -310,6 +318,15 @@ async function runPipeline({ prompt, brand, campaignType="auto", aspectRatio="1:
   const db     = readDB();
   const iModel = imageModel   || db.settings.imageModel   || "gpt-image-1";
   const eModel = enhanceModel || db.settings.enhanceModel || "gpt-4o";
+
+  // DEBUG: Log the brand object being used
+  console.log("🎨 GENERATION PIPELINE — Brand Data:", {
+    id: brand.id,
+    companyName: brand.companyName,
+    phone: brand.phone,
+    website: brand.website,
+    tagline: brand.tagline,
+  });
 
   // Step 1: Detect campaign + headline using GPT
   const refImages  = getRefImages(brand.id, 2);
