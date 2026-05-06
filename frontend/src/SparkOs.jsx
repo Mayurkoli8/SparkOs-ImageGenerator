@@ -107,7 +107,7 @@ async function fileToDataUrl(file) {
 async function api(path, opts = {}) {
   const res = await fetch(`${BACKEND}${path}`, {
     headers: { "Content-Type": "application/json", ...opts.headers },
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(180000),
     ...opts,
   });
   const data = await res.json().catch(() => ({}));

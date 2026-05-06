@@ -20,6 +20,13 @@ const OpenAI  = require("openai");
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
+// ── SERVER TIMEOUT ──────────────────────────────────────────────────────────
+const server = app.listen(PORT, "0.0.0.0", () => {
+  console.log(`\n⚡ SparkOs v5 → http://localhost:${PORT}`);
+  console.log(`   API key stored: ${!!readDB().settings?.openaiKey}`);
+});
+server.timeout = 180000; // 3 minutes
+
 // ── PERSISTENCE ──────────────────────────────────────────────────────────────
 // Use a persistent directory if provided (e.g. on Render), else local
 const DATA_DIR = process.env.DATA_DIR || __dirname;
@@ -593,10 +600,5 @@ if (process.env.NODE_ENV === "production") {
     app.get("*", (_, res) => res.sendFile(path.join(dist, "index.html")));
   }
 }
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`\n⚡ SparkOs v5 → http://localhost:${PORT}`);
-  console.log(`   API key stored: ${!!readDB().settings?.openaiKey}`);
-});
 
 module.exports = app;
