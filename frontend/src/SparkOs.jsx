@@ -1155,14 +1155,26 @@ function HistorySection({ history, activeBrand, setPreview, setTab, setHistory, 
 // WEBHOOK
 // ─────────────────────────────────────────────────────────────
 
-function WebhookPage({ apiKeySet, showToast }) {
+function WebhookPage({ activeBrand, apiKeySet, showToast }) {
   const async_=`${BACKEND}/webhook/generate`;
   const sync_= `${BACKEND}/webhook/generate/sync`;
-  const [payload,setPayload]=useState(JSON.stringify({requestId:"req_001",brandId:"brand_001",campaignType:"new_year",prompt:"Create a premium New Year post",aspectRatio:"1:1",callbackUrl:"https://n8n.yoursite.com/cb"},null,2));
+  const [payload,setPayload]=useState(JSON.stringify({requestId:"req_001",brandId:activeBrand?.id||"brand_001",campaignType:"new_year",prompt:"Create a premium New Year post",aspectRatio:"1:1",callbackUrl:"https://n8n.yoursite.com/cb"},null,2));
   const [logs,setLogs]=useState([]);
   const [simming,setSimming]=useState(false);
   const [cp,setCp]=useState({});
   const isMobile=useIsMobile();
+
+  useEffect(() => {
+    if (activeBrand) {
+      setPayload(prev => {
+        try {
+          const p = JSON.parse(prev);
+          p.brandId = activeBrand.id;
+          return JSON.stringify(p, null, 2);
+        } catch { return prev; }
+      });
+    }
+  }, [activeBrand?.id]);
 
   const copy=(txt,k)=>{navigator.clipboard.writeText(txt);setCp(p=>({...p,[k]:true}));setTimeout(()=>setCp(p=>({...p,[k]:false})),2000);};
 
@@ -1486,7 +1498,7 @@ export default function SparkOs() {
     studio:   <PromptStudio activeBrand={activeBrand} assets={assets} apiKeySet={apiKeySet} imageModel={imageModel} enhanceModel={enhanceModel} history={history} setHistory={setHistory} setPreview={setPreview} setTab={setActiveTab} showToast={showToast}/>,
     preview:  <PreviewSection item={preview||history[0]||null} history={history} setHistory={setHistory} showToast={showToast}/>,
     history:  <HistorySection history={history} activeBrand={activeBrand} setPreview={setPreview} setTab={setActiveTab} setHistory={setHistory} showToast={showToast}/>,
-    webhook:  <WebhookPage apiKeySet={apiKeySet} showToast={showToast}/>,
+    webhook:  <WebhookPage activeBrand={activeBrand} apiKeySet={apiKeySet} showToast={showToast}/>,
     settings: <SettingsPage apiKeySet={apiKeySet} setApiKeySet={setApiKeySet} apiKeyMasked={apiKeyMasked} setApiKeyMasked={setApiKeyMasked} imageModel={imageModel} setImageModel={setImageModel} enhanceModel={enhanceModel} setEnhanceModel={setEnhanceModel} showToast={showToast}/>,
   };
 

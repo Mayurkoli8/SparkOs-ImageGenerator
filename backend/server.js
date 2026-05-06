@@ -108,17 +108,17 @@ function getImageSize(ratio, model) {
 // ── CAMPAIGN CONFIGS ──────────────────────────────────────────────────────
 
 const CAMPAIGN_CONFIG = {
-  new_year:            { headline:"Happy New Year 2025", sub:"Wishing You Joy, Success & Prosperity", vibe:"golden fireworks bokeh, midnight dark sky, glowing lights, celebration",          colors:"gold, midnight blue, champagne glow" },
-  festival:            { headline:"Festival Greetings",  sub:"Celebrate the Joy of the Season",       vibe:"festive lighting, warm diyas, colorful rangoli, celebratory atmosphere",        colors:"saffron, crimson, gold" },
-  property_launch:     { headline:"Grand Launch",        sub:"Your Dream Home Awaits",                vibe:"architectural photography, glass towers, luxury facade, blue sky, dramatic sun", colors:"steel blue, white, gold" },
-  offer:               { headline:"Limited Time Offer",  sub:"Exclusive Deal — Don't Miss Out",       vibe:"clean modern studio, bold graphic design, premium product feel",                 colors:"deep navy, gold, white" },
-  site_visit:          { headline:"You're Invited",      sub:"Visit Your Future Home This Weekend",   vibe:"welcoming entrance, manicured garden, soft golden hour lighting",                colors:"warm amber, forest green, ivory" },
-  possession:          { headline:"Welcome Home",        sub:"Keys Handover — A Dream Fulfilled",     vibe:"joyful family, luxury apartment entrance, keys in hand, soft sunlight",          colors:"warm gold, off-white, earthy tones" },
-  milestone:           { headline:"Celebrating 10 Years",sub:"A Decade of Trust & Excellence",        vibe:"trophy, corporate elegance, golden confetti, premium dark background",           colors:"gold, charcoal, white" },
-  brand_awareness:     { headline:"Excellence Redefined",sub:"Where Luxury Meets Lifestyle",          vibe:"sweeping city skyline aerial, glass buildings, dramatic clouds, sunset",          colors:"deep blue, gold, silver" },
-  testimonial:         { headline:"Happy Homeowners",    sub:"Real Stories. Real Smiles.",            vibe:"warm interior photography, cozy living room, natural light, joyful family",      colors:"warm beige, terracotta, white" },
-  project_highlight:   { headline:"Project Spotlight",  sub:"Discover Our Latest Masterpiece",       vibe:"architectural render, rooftop pool, panoramic view, luxury interior",            colors:"teal, white, dark charcoal" },
-  construction_update: { headline:"Taking Shape",        sub:"Progress Update — On Time, On Vision",  vibe:"construction timelapse feel, golden sunrise, cranes, rising structure",           colors:"orange safety, grey concrete, sky blue" },
+  new_year:            { headline:"Happy New Year 2025", sub:"Wishing You Joy, Success & Prosperity", vibe:"elegant minimalist celebration, soft champagne bokeh, sophisticated midnight sky",          colors:"muted gold, deep navy, cream" },
+  festival:            { headline:"Festival Greetings",  sub:"Celebrate the Joy of the Season",       vibe:"modern festive lighting, warm elegant diyas, clean minimalist aesthetic",                colors:"saffron, deep burgundy, gold" },
+  property_launch:     { headline:"Grand Launch",        sub:"Your Dream Home Awaits",                vibe:"clean architectural photography, glass towers, luxury facade, crisp blue sky",           colors:"steel blue, white, muted gold" },
+  offer:               { headline:"Limited Time Offer",  sub:"Exclusive Deal — Don't Miss Out",       vibe:"modern studio setting, high-end product photography, bold but clean typography",         colors:"deep navy, gold, off-white" },
+  site_visit:          { headline:"You're Invited",      sub:"Visit Your Future Home This Weekend",   vibe:"welcoming modern entrance, manicured garden, soft natural afternoon light",              colors:"warm amber, forest green, ivory" },
+  possession:          { headline:"Welcome Home",        sub:"Keys Handover — A Dream Fulfilled",     vibe:"joyful family moment, luxury apartment entrance, keys in hand, soft natural lighting",   colors:"warm gold, off-white, soft terracotta" },
+  milestone:           { headline:"Celebrating 10 Years",sub:"A Decade of Trust & Excellence",        vibe:"corporate elegance, clean dark background, subtle golden accents, trophy",               colors:"gold, charcoal, white" },
+  brand_awareness:     { headline:"Excellence Redefined",sub:"Where Luxury Meets Lifestyle",          vibe:"sweeping modern city skyline, glass buildings, dramatic but natural clouds",             colors:"deep blue, muted gold, silver" },
+  testimonial:         { headline:"Happy Homeowners",    sub:"Real Stories. Real Smiles.",            vibe:"sophisticated interior photography, cozy living room, clean natural light",              colors:"warm beige, slate, white" },
+  project_highlight:   { headline:"Project Spotlight",  sub:"Discover Our Latest Masterpiece",       vibe:"modern architectural render, rooftop pool, panoramic view, luxury interior",            colors:"teal, white, dark charcoal" },
+  construction_update: { headline:"Taking Shape",        sub:"Progress Update — On Time, On Vision",  vibe:"modern construction site, golden sunrise, clean architectural lines rising",            colors:"deep orange, grey concrete, sky blue" },
 };
 
 const DEFAULT_CAMPAIGN = { headline:"Premium Living", sub:"Building Dreams, Creating Legacies", vibe:"luxury real estate aerial view, glass towers, city panorama, golden sunset", colors:"gold, dark navy, white" };
@@ -174,6 +174,7 @@ function buildMasterPrompt(userPrompt, brand, campaignType, detectedHeadline, re
   });
 
   return `You are creating a ${brandType} marketing poster. This must look like it was designed by a world-class professional graphic designer for Instagram.
+The aesthetic must be MODERN, CLASSIC, and SOPHISTICATED. Avoid over-edited, high-saturation, or "glowy" digital looks unless specifically requested.
 
 ${refInstruction}
 
@@ -186,39 +187,32 @@ Campaign context: "${userPrompt}".
 ${extra ? `Special request: ${extra}` : ""}
 ${avoid ? `Do NOT include: ${avoid}` : ""}
 
-━━━ TEXT THAT MUST APPEAR IN THE IMAGE ━━━
-Render these text elements as part of the design — styled, positioned, beautiful:
+━━━ TEXT INTEGRATION ━━━
+Integrate these text elements organically into the design. They should feel like they were part of the original composition, not added as an afterthought. Use professional font pairings and sophisticated layouts.
 
-① MAIN HEADLINE — large, bold, dominant, takes up significant visual space:
-   "${mainHeadline}"
-   Style: Impactful display font, high contrast against background, decorative if appropriate
+① PRIMARY HEADLINE: "${mainHeadline}"
+   - Style: Elegant, bold, and impactful typography that matches the "modern classic" theme. High contrast and perfectly readable. It should be a dominant part of the visual hierarchy.
 
-② SUB-HEADLINE — medium size, beneath or beside main headline:
-   "${subHeadline}"
-   Style: Lighter weight, elegant, readable
+② SECONDARY MESSAGE: "${subHeadline}"
+   - Style: Sophisticated, smaller scale, perfectly aligned to complement the main headline.
 
-③ BOTTOM BRAND BAR — at the very bottom of the image, clean dark or colored strip/band:
-   "${bottomBlock}"
-   Style: Professional sans-serif, smaller size, ULTRA-CRISP SHARP TEXT, white or light text on dark/colored background strip
-   CRITICAL: This text MUST be pixel-perfect sharp, high contrast, 100% legible — not blurry under any circumstances
+③ ELEGANT BRAND FOOTER: "${bottomBlock}"
+   - Placement: Subtly but clearly integrated along the very bottom edge.
+   - Style: Clean, professional, and minimal. Use a very subtle semi-transparent background if necessary for legibility, but avoid heavy "bars".
+   - CRITICAL: MUST be perfectly crisp, sharp, and readable. This is the official brand signature.
 
 ━━━ COMPOSITION RULES ━━━
-- TOP-RIGHT ~15% of image: intentionally left clear — no text elements here, natural background only
-- Headline: Dominant, upper half or center, designed with the scene not just placed on top
-- Bottom brand strip: Full-width band at bottom, ~12% height, shows company name + phone + website — TEXT MUST BE CRISP
-- Overall: magazine cover quality, dramatic depth, professional lighting, photorealistic or high-end illustration
-- Typography: ALL TEXT must be CRISP, SHARP, READABLE — not blurry, not distorted, especially the bottom bar
-- Aspect ratio composition: fill the full frame, no empty space at edges
+- TOP-RIGHT ~15% area: keep mostly clear for UI overlay.
+- Scene depth: use professional photographic principles (soft depth of field, balanced composition).
+- Lighting: natural, professional studio, or soft cinematic. Avoid "over-processed" digital effects.
+- Typography: Organic, designed, and integrated. Text should interact with the lighting of the scene where appropriate.
 
 ━━━ QUALITY STANDARD ━━━
-This poster will be published to Instagram. It must be thumb-stopping.
-- Cinematic lighting (dramatic shadows, god rays, bokeh, golden hour glow)
-- Ultra sharp details
-- Luxury feel — nothing cheap, nothing amateur
-- The text must look DESIGNED, not added after — it is part of the visual composition
-- Every element serves a purpose
-
-CRITICAL: Render all text legibly. Company name, phone number and website MUST be visible and readable at the bottom.`;
+- Modern, clean, and classic aesthetic.
+- High-end professional photography feel.
+- Sharp, crisp text rendering.
+- Sophisticated color grading.
+- Every element must feel intentional and high-quality.`;
 }
 
 // ── ENHANCE PROMPT (detect campaign + get headline) ────────────────────────
@@ -509,7 +503,7 @@ app.post("/api/generate", async (req, res) => {
   const { brandId, prompt, campaignType, aspectRatio, imageModel, enhanceModel } = req.body;
   if (!prompt) return res.status(400).json({ error:"prompt is required" });
   const db    = readDB();
-  const brand = brandId ? (db.brands[brandId]||{}) : (Object.values(db.brands)[0]||{});
+  const brand = (brandId && db.brands[brandId]) ? db.brands[brandId] : (Object.values(db.brands)[0] || {});
   try {
     const result = await runPipeline({ prompt, brand, campaignType, aspectRatio, imageModel, enhanceModel, req });
     res.json({ success:true, ...result });
@@ -546,7 +540,7 @@ app.post("/webhook/generate", async (req, res) => {
   const { requestId, brandId, campaignType, prompt, aspectRatio, imageModel, enhanceModel, callbackUrl } = req.body;
   if (!prompt) return res.status(400).json({ success:false, error:"prompt is required" });
   const db    = readDB();
-  const brand = brandId ? (db.brands[brandId]||{}) : (Object.values(db.brands)[0]||{});
+  const brand = (brandId && db.brands[brandId]) ? db.brands[brandId] : (Object.values(db.brands)[0] || {});
   const logId = uid();
   db.webhookLogs.unshift({ id:logId, requestId, brandId, prompt, status:"processing", receivedAt:new Date().toISOString() });
   writeDB(db);
@@ -576,7 +570,7 @@ app.post("/webhook/generate/sync", async (req, res) => {
   const { requestId, brandId, campaignType, prompt, aspectRatio, imageModel, enhanceModel } = req.body;
   if (!prompt) return res.status(400).json({ success:false, error:"prompt is required" });
   const db    = readDB();
-  const brand = brandId ? (db.brands[brandId]||{}) : (Object.values(db.brands)[0]||{});
+  const brand = (brandId && db.brands[brandId]) ? db.brands[brandId] : (Object.values(db.brands)[0] || {});
   try {
     const result = await runPipeline({ prompt, brand, campaignType:campaignType||"auto", aspectRatio:aspectRatio||"1:1", imageModel, enhanceModel, req });
     res.json({ success:true, requestId, generationId:result.id, imageUrl:result.imageUrl, thumbnailUrl:result.thumbnailUrl, brandId:result.brandId, campaignType:result.campaignType, headline:result.headline, createdAt:result.createdAt });
