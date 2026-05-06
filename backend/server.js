@@ -20,18 +20,22 @@ const OpenAI  = require("openai");
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
+// ── PERSISTENCE ──────────────────────────────────────────────────────────────
+// Use a persistent directory if provided (e.g. on Render), else local
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+
 ["public/generated","public/thumbnails","uploads/logos","uploads/images",
  "uploads/posters","uploads/docs","data"]
-  .forEach(d => fs.mkdirSync(path.join(__dirname, d), { recursive: true }));
+  .forEach(d => fs.mkdirSync(path.join(DATA_DIR, d), { recursive: true }));
 
 app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
-app.use("/public",  express.static(path.join(__dirname, "public")));
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/public",  express.static(path.join(DATA_DIR, "public")));
+app.use("/uploads", express.static(path.join(DATA_DIR, "uploads")));
 
 // ── DB ─────────────────────────────────────────────────────────────────────
-const DB_PATH = path.join(__dirname, "data/db.json");
+const DB_PATH = path.join(DATA_DIR, "data/db.json");
 
 const DEFAULT_DB = () => ({
   auth: { passwordHash: crypto.createHash("sha256").update("sparkos2024").digest("hex") },
@@ -60,7 +64,7 @@ function writeDB(data) {
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const type = req.query.type || "images";
-    const dest = path.join(__dirname, `uploads/${type}`);
+    const dest = path.join(DATA_DIR, `uploads/${type}`);
     fs.mkdirSync(dest, { recursive: true });
     cb(null, dest);
   },
@@ -340,8 +344,8 @@ async function runPipeline({ prompt, brand, campaignType="auto", aspectRatio="1:
   // Step 4: Save
   const genId    = `gen_${uid()}`;
   const filename = `${genId}.png`;
-  fs.writeFileSync(path.join(__dirname, "public/generated",  filename), imageBuffer);
-  fs.writeFileSync(path.join(__dirname, "public/thumbnails", `${genId}_thumb.png`), imageBuffer);
+  fs.writeFileSync(path.join(DATA_DIR, "public/generated",  filename), imageBuffer);
+  fs.writeFileSync(path.join(DATA_DIR, "public/thumbnails", `${genId}_thumb.png`), imageBuffer);
 
   const base   = getBaseUrl(req);
   const record = {
@@ -443,7 +447,7 @@ app.post("/api/assets/upload", upload.single("file"), (req, res) => {
   const type    = req.query.type || "images";
   if (!db.assets[brandId]) db.assets[brandId] = { images:[], posters:[], docs:[] };
 
-  const filePath     = path.join(__dirname, `uploads/${type}/${req.file.filename}`);
+  const filePath     = path.join(DATA_DIR, `uploads/${type}/${req.file.filename}`);
   const relativePath = `uploads/${type}/${req.file.filename}`;
   const url          = `${req.protocol}://${req.get("host")}/${relativePath}`;
   const fileId       = uid();
@@ -491,7 +495,7 @@ app.delete("/api/assets/:brandId/:type/:fileId", (req, res) => {
   const { brandId, type, fileId } = req.params;
   if (db.assets[brandId]?.[type]) {
     const item = db.assets[brandId][type].find(i => i.id === fileId);
-    if (item) { try { fs.unlinkSync(path.join(__dirname, item.path)); } catch {} }
+    if (item) { try { fs.unlinkSync(path.join(DATA_DIR, item.path)); } catch {} }
     db.assets[brandId][type] = db.assets[brandId][type].filter(i => i.id !== fileId);
     writeDB(db);
   }
@@ -527,7 +531,7 @@ app.delete("/api/generations/:id", (req, res) => {
   const db  = readDB();
   const gen = db.generations.find(g => g.id === req.params.id);
   if (gen) ["public/generated","public/thumbnails"].forEach(dir => {
-    const f = path.join(__dirname, dir, path.basename(gen.imageUrl||""));
+    const f = path.join(DATA_DIR, dir, path.basename(gen.imageUrl||""));
     try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch {}
   });
   db.generations = db.generations.filter(g => g.id !== req.params.id);

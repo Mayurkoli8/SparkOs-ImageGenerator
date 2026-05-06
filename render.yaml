@@ -17,9 +17,11 @@ services:
         sync: false
       - key: FRONTEND_URL
         value: "*"
+      - key: DATA_DIR
+        value: /var/data
     disk:
       name: sparkos-storage
-      mountPath: /opt/render/project/src/backend/public
+      mountPath: /var/data
       sizeGB: 10
 
   - type: web
